@@ -3,6 +3,7 @@ import { CoachPanel } from '@/components/CoachPanel';
 import { TradingControls } from '@/components/TradingControls';
 import { StatsBar, AchievementPopup } from '@/components/StatsBar';
 import { TradeHistory } from '@/components/TradeHistory';
+import { PhaseBadge } from '@/components/PhaseBadge';
 import { useTradingEngine } from '@/hooks/useTradingEngine';
 import { Pause, Play, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -35,9 +36,7 @@ const Index = () => {
           <h1 className="text-lg font-bold text-foreground tracking-tight">
             Trade<span className="text-primary">School</span>
           </h1>
-          <span className="text-[10px] bg-primary/15 text-primary px-2 py-0.5 rounded-full font-medium ml-1">
-            Phase {stats.phase}: {stats.phase === 1 ? 'What Is a Trade' : 'Trend Recognition'}
-          </span>
+          <PhaseBadge currentPhase={stats.phase} totalXpEarned={stats.xp} />
         </div>
 
         <div className="flex items-center gap-2">
