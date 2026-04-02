@@ -1,31 +1,19 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Lock, CheckCircle2, Circle } from 'lucide-react';
-
-const PHASES = [
-  { id: 1, title: 'What Is a Trade', desc: 'Place your first buy and sell. Learn price, profit, and loss basics.', unlockXp: 0 },
-  { id: 2, title: 'Trend Recognition', desc: 'Identify uptrends and downtrends before trading.', unlockXp: 100 },
-  { id: 3, title: 'Candlestick Reading', desc: 'Understand candle anatomy, wicks, and rejection signals.', unlockXp: 250 },
-  { id: 4, title: 'Support & Resistance', desc: 'Trade bounces off key horizontal price levels.', unlockXp: 500 },
-  { id: 5, title: 'Volume Analysis', desc: 'Use volume to confirm breakouts and filter fake moves.', unlockXp: 800 },
-  { id: 6, title: 'Entry Timing', desc: 'Wait for confirmation before entering trades.', unlockXp: 1200 },
-  { id: 7, title: 'Risk Management', desc: 'Master stop losses, position sizing, and take profits.', unlockXp: 1800 },
-  { id: 8, title: 'Market Patterns', desc: 'Recognize pullbacks, consolidation, and breakout setups.', unlockXp: 2500 },
-  { id: 9, title: 'Indicators', desc: 'Learn SMA, RSI, MACD, and Bollinger Bands.', unlockXp: 3500 },
-  { id: 10, title: 'Trading Psychology', desc: 'Conquer revenge trading, FOMO, and emotional attachment.', unlockXp: 5000 },
-];
+import { PHASES } from '@/lib/phases';
 
 interface PhaseBadgeProps {
   currentPhase: number;
   totalXpEarned: number;
 }
 
-export function PhaseBadge({ currentPhase, totalXpEarned }: PhaseBadgeProps) {
+export function PhaseBadge({ currentPhase }: PhaseBadgeProps) {
   const current = PHASES.find(p => p.id === currentPhase) || PHASES[0];
 
   return (
     <Tooltip delayDuration={200}>
       <TooltipTrigger asChild>
-        <button className="text-[10px] bg-primary/15 text-primary px-2.5 py-1 rounded-full font-medium ml-1 hover:bg-primary/25 transition-colors cursor-pointer border border-primary/20">
+        <button className="text-[10px] bg-primary/15 text-primary px-2.5 py-1 rounded-full font-medium ml-1 hover:bg-primary/25 transition-colors cursor-pointer border border-primary/20" data-testid="button-phase-badge">
           Phase {current.id}: {current.title}
         </button>
       </TooltipTrigger>
@@ -38,7 +26,6 @@ export function PhaseBadge({ currentPhase, totalXpEarned }: PhaseBadgeProps) {
           {PHASES.map(phase => {
             const isComplete = phase.id < currentPhase;
             const isCurrent = phase.id === currentPhase;
-            const isLocked = phase.id > currentPhase;
 
             return (
               <div
