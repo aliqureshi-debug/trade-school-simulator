@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Candle, Trade, CoachMessage, PlayerStats, Achievement, AriaState, SRZone } from '@/types/trading';
+import { Candle, Trade, CoachMessage, PlayerStats, Achievement, AriaState, SRZone, NewsEvent } from '@/types/trading';
 import {
   generateInitialCandles,
   generateNextCandle,
@@ -7,6 +7,7 @@ import {
   findSRZones,
   findSupportResistance,
   calculateEMA,
+  getNewsEvent,
 } from '@/lib/chartEngine';
 import {
   getWelcomeMessages,
@@ -23,6 +24,7 @@ import {
 } from '@/lib/coachEngine';
 import { getPhase, getNextPhase, PHASES } from '@/lib/phases';
 import { sound } from '@/lib/soundEngine';
+import { saveState, loadState, clearState, SavedState } from '@/lib/persistence';
 
 const STARTING_BALANCE = 10000;
 
@@ -36,6 +38,49 @@ const DEFAULT_ACHIEVEMENTS: Achievement[] = [
   { id: 'phase-3', title: 'Trend Spotter', description: 'Complete Phase 3', icon: '📈', unlocked: false },
   { id: 'phase-6', title: 'Risk Guardian', description: 'Complete Phase 6', icon: '🛡️', unlocked: false },
 ];
+
+function buildDefaultStats(): PlayerStats {
+  return {
+    level: 1,
+    xp: 0,
+    xpToNext: 100,
+    xpTotal: 0,
+    totalTrades: 0,
+    winRate: 0,
+    balance: STARTING_BALANCE,
+    startingBalance: STARTING_BALANCE,
+    achievements: [...DEFAULT_ACHIEVEMENTS],
+    phase: 1,
+    conceptsSeen: [],
+    challengeProgress: 0,
+    stopLossCount: 0,
+  };
+}
+
+function mergeAchievements(saved: Achievement[]): Achievement[] {
+  return DEFAULT_ACHIEVEMENTS.map(def => {
+    const found = saved.find(a => a.id === def.id);
+    return found ? { ...def, unlocked: found.unlocked, unlockedAt: found.unlockedAt } : def;
+  });
+}
+
+function buildStatsFromSave(saved: SavedState): PlayerStats {
+  return {
+    level: saved.level ?? 1,
+    xp: saved.xp ?? 0,
+    xpToNext: saved.xpToNext ?? 100,
+    xpTotal: saved.xpTotal ?? 0,
+    totalTrades: saved.totalTrades ?? 0,
+    winRate: saved.winRate ?? 0,
+    balance: saved.balance ?? STARTING_BALANCE,
+    startingBalance: STARTING_BALANCE,
+    achievements: mergeAchievements(saved.achievements ?? []),
+    phase: saved.phase ?? 1,
+    conceptsSeen: saved.conceptsSeen ?? [],
+    challengeProgress: saved.challengeProgress ?? 0,
+    stopLossCount: saved.stopLossCount ?? 0,
+  };
+}
 
 export interface TradingEngineState {
   candles: Candle[];
@@ -59,6 +104,8 @@ export interface TradingEngineState {
   lotSize: number;
   stopLoss: number | null;
   takeProfit: number | null;
+  newsEvent: NewsEvent;
+  muted: boolean;
 }
 
 export interface TradingEngineActions {
@@ -69,28 +116,22 @@ export interface TradingEngineActions {
   setStopLoss: (price: number | null) => void;
   setTakeProfit: (price: number | null) => void;
   devUnlockAll: () => void;
+  resetProgress: () => void;
+  toggleMute: () => void;
 }
 
 export function useTradingEngine(): TradingEngineState & TradingEngineActions {
+  // Lazy-init from localStorage
+  const savedRef = useRef<SavedState | null>(loadState());
+  const saved = savedRef.current;
+
   const [candles, setCandles] = useState<Candle[]>(() => generateInitialCandles(60));
-  const [trades, setTrades] = useState<Trade[]>([]);
+  const [trades, setTrades] = useState<Trade[]>(() => saved?.trades ?? []);
   const [activeTrade, setActiveTrade] = useState<Trade | null>(null);
   const [coachMessages, setCoachMessages] = useState<CoachMessage[]>(getWelcomeMessages);
-  const [stats, setStats] = useState<PlayerStats>({
-    level: 1,
-    xp: 0,
-    xpToNext: 100,
-    xpTotal: 0,
-    totalTrades: 0,
-    winRate: 0,
-    balance: STARTING_BALANCE,
-    startingBalance: STARTING_BALANCE,
-    achievements: [...DEFAULT_ACHIEVEMENTS],
-    phase: 1,
-    conceptsSeen: [],
-    challengeProgress: 0,
-    stopLossCount: 0,
-  });
+  const [stats, setStats] = useState<PlayerStats>(() =>
+    saved ? buildStatsFromSave(saved) : buildDefaultStats()
+  );
   const [newAchievement, setNewAchievement] = useState<Achievement | null>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [ariaState, setAriaState] = useState<AriaState>('teal');
@@ -101,6 +142,12 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
   const [lotSize, setLotSize] = useState(0.1);
   const [stopLoss, setStopLoss] = useState<number | null>(null);
   const [takeProfit, setTakeProfit] = useState<number | null>(null);
+  const [newsEvent, setNewsEvent] = useState<NewsEvent>({ state: 'idle', direction: 'up', candlesRemaining: 60, spikeAmount: 0 });
+  const [muted, setMuted] = useState<boolean>(() => {
+    const m = saved?.muted ?? false;
+    sound.setMuted(m);
+    return m;
+  });
 
   const tickRef = useRef(0);
   const coachTickRef = useRef(0);
@@ -126,6 +173,27 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
       : (activeTrade.entryPrice - currentPrice) * activeTrade.lotSize * 100;
     return Math.round(raw * 100) / 100;
   }, [activeTrade, currentPrice]);
+
+  // Persistence: save whenever stats, trades, or muted change
+  useEffect(() => {
+    saveState({
+      phase: stats.phase,
+      xp: stats.xp,
+      xpTotal: stats.xpTotal,
+      xpToNext: stats.xpToNext,
+      level: stats.level,
+      balance: stats.balance,
+      trades,
+      achievements: stats.achievements,
+      challengeProgress: stats.challengeProgress,
+      stopLossCount: stats.stopLossCount,
+      conceptsSeen: stats.conceptsSeen,
+      totalTrades: stats.totalTrades,
+      winRate: stats.winRate,
+      muted,
+      savedAt: Date.now(),
+    });
+  }, [stats, trades, muted]);
 
   const addCoachMessage = useCallback((message: CoachMessage | null) => {
     if (!message) return;
@@ -251,11 +319,9 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
     setTrades(prev => {
       const allClosed = [...prev, closedTrade];
 
-      // Check challenge progress
       setStats(prevStats => {
         const phase = getPhase(prevStats.phase);
         const criteria = phase.challenge.criteria;
-        const closedTrades = allClosed.filter(t => t.status === 'closed');
 
         let meetsThisOne = true;
         if (criteria.tradeType && closedTrade.type !== criteria.tradeType) meetsThisOne = false;
@@ -274,8 +340,8 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
         const required = criteria.count ?? 1;
         const challengeComplete = newProgress >= required;
 
-        const wins = closedTrades.filter(t => (t.pnl ?? 0) > 0).length;
-        const total = closedTrades.length;
+        const wins = allClosed.filter(t => (t.pnl ?? 0) > 0).length;
+        const total = allClosed.length;
         const newStopLossCount = closedTrade.hadStopLoss ? prevStats.stopLossCount + 1 : prevStats.stopLossCount;
 
         const nextPhase = getNextPhase(prevStats.phase);
@@ -305,7 +371,6 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
           if (prevStats.phase === 3) setTimeout(() => unlockAchievement('phase-3'), 1000);
           if (prevStats.phase === 6) setTimeout(() => unlockAchievement('phase-6'), 1000);
         } else if (!challengeComplete && !meetsThisOne && prevStats.challengeProgress === newProgress) {
-          // Only give failure feedback occasionally
           if (total % 2 === 0) {
             setTimeout(() => addCoachMessage(getChallengeFeedback(phase.challenge.failureMessage)), 500);
           }
@@ -386,6 +451,15 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
         const newCandle = generateNextCandle(lastCandle.close, Date.now());
         sound.candleClose();
 
+        // Update news event state
+        setNewsEvent(getNewsEvent());
+
+        // Fire sound on news spike start
+        const currentNews = getNewsEvent();
+        if (currentNews.state === 'spike' && currentNews.candlesRemaining > 0) {
+          sound.newsSpike();
+        }
+
         // Auto-close on SL/TP
         if (activeTrade) {
           const price = newCandle.close;
@@ -420,6 +494,7 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
         if (next <= 0) {
           cooldownRef.current = 0;
           setAriaState('teal');
+          sound.cooldownEnd();
         } else {
           cooldownRef.current = next;
         }
@@ -496,6 +571,35 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
     return () => window.removeEventListener('keydown', handler);
   }, [devUnlockAll]);
 
+  const resetProgress = useCallback(() => {
+    clearState();
+    setStats(buildDefaultStats());
+    setTrades([]);
+    setActiveTrade(null);
+    setCooldownSeconds(0);
+    cooldownRef.current = 0;
+    setAriaState('teal');
+    setPhaseUnlocking(false);
+    setXpGain(null);
+    setTradeResult(null);
+    setStopLoss(null);
+    setTakeProfit(null);
+    addCoachMessage({
+      id: `reset-${Date.now()}`,
+      text: 'Journey reset. Every master started at zero. Let\'s begin again.',
+      type: 'learn',
+      timestamp: Date.now(),
+    });
+  }, [addCoachMessage]);
+
+  const toggleMute = useCallback(() => {
+    setMuted(prev => {
+      const next = !prev;
+      sound.setMuted(next);
+      return next;
+    });
+  }, []);
+
   return {
     candles,
     trades,
@@ -518,6 +622,8 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
     lotSize,
     stopLoss,
     takeProfit,
+    newsEvent,
+    muted,
     setIsPaused,
     openTrade,
     closeTrade,
@@ -525,5 +631,7 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
     setStopLoss,
     setTakeProfit,
     devUnlockAll,
+    resetProgress,
+    toggleMute,
   };
 }

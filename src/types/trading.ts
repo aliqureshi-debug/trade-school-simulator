@@ -32,6 +32,22 @@ export interface Trade {
 
 export type AriaState = 'teal' | 'amber' | 'red';
 
+export type UserArchetype = 'scalper' | 'swing' | 'risk-manager';
+
+export interface UserProfile {
+  name: string;
+  archetype: UserArchetype;
+  created: number;
+}
+
+export interface DisciplineScore {
+  total: number;
+  stopLossAdherence: number;
+  rrDiscipline: number;
+  noRevengeTrade: number;
+  consistencyBonus: number;
+}
+
 export interface CoachMessage {
   id: string;
   text: string;
@@ -58,6 +74,12 @@ export interface ChallengeCriteria {
   count?: number;
 }
 
+export interface ChallengeCriterion {
+  id: string;
+  description: string;
+  check: (trade: Trade, stats: PlayerStats) => boolean;
+}
+
 export interface Challenge {
   title: string;
   description: string;
@@ -66,6 +88,36 @@ export interface Challenge {
   xpReward: number;
   failureMessage: string;
   successMessage: string;
+}
+
+export interface DailyChallenge {
+  id: string;
+  title: string;
+  description: string;
+  xpReward: number;
+  progress: number;
+  target: number;
+  completed: boolean;
+  resetAt: number;
+}
+
+export interface WeeklyChallenge extends DailyChallenge {
+  weeklyResetAt: number;
+}
+
+export type NewsEventState = 'idle' | 'preWarning' | 'spike' | 'retracement';
+
+export interface NewsEvent {
+  state: NewsEventState;
+  direction: 'up' | 'down';
+  candlesRemaining: number;
+  spikeAmount: number;
+}
+
+export interface SwingPoint {
+  index: number;
+  price: number;
+  type: 'high' | 'low';
 }
 
 export interface Phase {

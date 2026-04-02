@@ -92,6 +92,19 @@ export const sound = {
     tone(1047, 0.2, 0.12, 'sine', 0.27);
   },
 
+  newsSpike() {
+    // Three rapid ascending beeps: 440 → 550 → 660 Hz
+    tone(440, 0.08, 0.14, 'sine', 0);
+    tone(550, 0.08, 0.14, 'sine', 0.1);
+    tone(660, 0.1, 0.16, 'sine', 0.2);
+  },
+
+  cooldownEnd() {
+    // Soft ascending two-tone: 440 → 660 Hz
+    tone(440, 0.12, 0.09, 'sine', 0);
+    tone(660, 0.2, 0.11, 'sine', 0.14);
+  },
+
   setMuted(val: boolean) {
     muted = val;
   },

@@ -1,4 +1,4 @@
-import { Candle, MarketCondition, MarketRegime, SRZone } from '@/types/trading';
+import { Candle, MarketCondition, MarketRegime, NewsEvent, NewsEventState, SRZone } from '@/types/trading';
 
 const STARTING_PRICE = 100;
 
@@ -12,12 +12,100 @@ let volatilityCluster = 1.0;
 let volatilityClusterDir = 1;
 let volatilityClusterTick = 0;
 
+// News event state
+let nextNewsCountdown = 50 + Math.floor(Math.random() * 30);
+let newsPhase: NewsEventState = 'idle';
+let newsPhaseCountdown = 0;
+let newsDirection: 'up' | 'down' = 'up';
+let newsSpikeAmount = 0;
+let newsSpikePerCandle = 0;
+let newsRetracementPerCandle = 0;
+
+function resetNewsState(): void {
+  nextNewsCountdown = 50 + Math.floor(Math.random() * 30);
+  newsPhase = 'idle';
+  newsPhaseCountdown = 0;
+  newsDirection = 'up';
+  newsSpikeAmount = 0;
+  newsSpikePerCandle = 0;
+  newsRetracementPerCandle = 0;
+}
+
+function advanceNewsEvent(): number {
+  if (newsPhase === 'idle') {
+    nextNewsCountdown--;
+    if (nextNewsCountdown <= 3 && nextNewsCountdown > 0) {
+      // Pre-warning: decide direction and spike size now
+      if (newsPhase === 'idle') {
+        newsDirection = Math.random() > 0.5 ? 'up' : 'down';
+        newsSpikeAmount = (20 + Math.floor(Math.random() * 21)) * 0.01; // 20-40 pips
+        newsPhase = 'preWarning';
+        newsPhaseCountdown = nextNewsCountdown;
+      }
+    } else if (nextNewsCountdown <= 0) {
+      // Missed pre-warning — go straight to spike
+      newsDirection = Math.random() > 0.5 ? 'up' : 'down';
+      newsSpikeAmount = (20 + Math.floor(Math.random() * 21)) * 0.01;
+      const spikeCandlesTotal = 2 + Math.floor(Math.random() * 2);
+      newsSpikePerCandle = newsSpikeAmount / spikeCandlesTotal;
+      newsPhase = 'spike';
+      newsPhaseCountdown = spikeCandlesTotal;
+    }
+    return 0;
+  }
+
+  if (newsPhase === 'preWarning') {
+    newsPhaseCountdown--;
+    if (newsPhaseCountdown <= 0) {
+      const spikeCandlesTotal = 2 + Math.floor(Math.random() * 2);
+      newsSpikePerCandle = newsSpikeAmount / spikeCandlesTotal;
+      newsPhase = 'spike';
+      newsPhaseCountdown = spikeCandlesTotal;
+    }
+    return 0;
+  }
+
+  if (newsPhase === 'spike') {
+    newsPhaseCountdown--;
+    const bias = newsDirection === 'up' ? newsSpikePerCandle : -newsSpikePerCandle;
+    if (newsPhaseCountdown <= 0) {
+      const retracementTotal = 4 + Math.floor(Math.random() * 3);
+      newsRetracementPerCandle = (newsSpikeAmount * 0.5) / retracementTotal;
+      newsPhase = 'retracement';
+      newsPhaseCountdown = retracementTotal;
+    }
+    return bias;
+  }
+
+  if (newsPhase === 'retracement') {
+    newsPhaseCountdown--;
+    const bias = newsDirection === 'up' ? -newsRetracementPerCandle : newsRetracementPerCandle;
+    if (newsPhaseCountdown <= 0) {
+      newsPhase = 'idle';
+      nextNewsCountdown = 50 + Math.floor(Math.random() * 30);
+    }
+    return bias;
+  }
+
+  return 0;
+}
+
+export function getNewsEvent(): NewsEvent {
+  const spikeAmountPips = Math.round(newsSpikeAmount / 0.01);
+  return {
+    state: newsPhase,
+    direction: newsDirection,
+    candlesRemaining: newsPhase === 'idle' ? nextNewsCountdown : newsPhaseCountdown,
+    spikeAmount: spikeAmountPips,
+  };
+}
+
 export function generateInitialCandles(count: number): Candle[] {
   const candles: Candle[] = [];
   let price = STARTING_PRICE;
   let time = Date.now() - count * 2000;
 
-  // Reset state
+  // Reset all state
   currentRegime = { condition: 'uptrend', candlesRemaining: 20 };
   swingHighs = [];
   swingLows = [];
@@ -26,6 +114,7 @@ export function generateInitialCandles(count: number): Candle[] {
   volatilityCluster = 1.0;
   volatilityClusterDir = 1;
   volatilityClusterTick = 0;
+  resetNewsState();
 
   for (let i = 0; i < count; i++) {
     const candle = generateNextCandleInternal(price, time);
@@ -113,11 +202,16 @@ function generateNextCandleInternal(prevClose: number, time: number): Candle {
     }
   }
 
+  // News event bias — overrides regular bias during spike/retracement
+  const newsBias = advanceNewsEvent();
+
   const open = prevClose;
-  const change = (Math.random() - 0.5) * baseVol * 2 + bias;
+  const change = (Math.random() - 0.5) * baseVol * 2 + bias + newsBias;
   const close = Math.max(open + change, 0.01);
 
-  const wickMult = c === 'volatile' ? 1.5 : c === 'breakout' ? 0.5 : 1.0;
+  // Increase volume and wicks during news
+  const isNewsActive = newsPhase === 'spike' || newsPhase === 'retracement';
+  const wickMult = isNewsActive ? 2.0 : c === 'volatile' ? 1.5 : c === 'breakout' ? 0.5 : 1.0;
   const wickUp = Math.random() * baseVol * 0.9 * wickMult;
   const wickDown = Math.random() * baseVol * 0.9 * wickMult;
 
@@ -144,7 +238,7 @@ function generateNextCandleInternal(prevClose: number, time: number): Candle {
     high: Math.round(high * 100) / 100,
     low: Math.round(low * 100) / 100,
     close: Math.round(close * 100) / 100,
-    volume: Math.round(baseVolume * volumeMultiplier),
+    volume: Math.round(baseVolume * volumeMultiplier * (isNewsActive ? 2.5 : 1)),
   };
 }
 
@@ -190,7 +284,7 @@ export function findSRZones(candles: Candle[]): SRZone[] {
     if (isLowest) pivotLows.push(low);
   }
 
-  // Group levels within 8 pips (0.08) of each other
+  // Group levels within 0.8 of each other
   const pipGroup = 0.8;
 
   function groupLevels(levels: number[]): { price: number; strength: number }[] {
@@ -258,6 +352,51 @@ export function calculateEMA(candles: Candle[], period: number): number[] {
   }
 
   return ema;
+}
+
+export function calculateRSI(candles: Candle[], period: number = 14): number[] {
+  if (candles.length < 2) return candles.map(() => 50);
+
+  const rsi: number[] = [];
+
+  // Fill warmup with neutral 50
+  const warmup = Math.min(period, candles.length - 1);
+  for (let i = 0; i <= warmup; i++) {
+    rsi.push(50);
+  }
+
+  if (candles.length <= period + 1) return rsi;
+
+  // Initial averages (simple mean over first `period` moves)
+  let avgGain = 0;
+  let avgLoss = 0;
+  for (let i = 1; i <= period; i++) {
+    const change = candles[i].close - candles[i - 1].close;
+    if (change > 0) avgGain += change;
+    else avgLoss += Math.abs(change);
+  }
+  avgGain /= period;
+  avgLoss /= period;
+
+  const computeRSI = (gain: number, loss: number): number => {
+    if (loss === 0) return 100;
+    return Math.round((100 - 100 / (1 + gain / loss)) * 100) / 100;
+  };
+
+  // Replace the last warmup value with the real first RSI value
+  rsi[period] = computeRSI(avgGain, avgLoss);
+
+  // Wilder smoothing for the rest
+  for (let i = period + 1; i < candles.length; i++) {
+    const change = candles[i].close - candles[i - 1].close;
+    const gain = Math.max(change, 0);
+    const loss = Math.max(-change, 0);
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
+    rsi.push(computeRSI(avgGain, avgLoss));
+  }
+
+  return rsi;
 }
 
 export function getSwingPoints(candles: Candle[]): { highs: number[]; lows: number[] } {
