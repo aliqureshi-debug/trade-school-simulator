@@ -1,0 +1,574 @@
+Here is your complete prompt:
+
+---
+
+You are a principal-level React/TypeScript engineer, a professional trader with institutional market experience, and a world-class product designer. You have been handed the complete codebase of **TradeSchool** — a browser-based trading simulator and education platform. The full app summary is provided below. Read it completely. Then read every single file in the codebase. Understand exactly what exists, what is broken, what is missing, and what is merely stubbed. Write your full audit findings before touching a single line of code.
+
+---
+
+## WHAT THE APP IS
+
+A browser-based trading simulator where users learn to trade XAU/USD through a 12-phase curriculum guided by an AI coach named ARIA. No real money — $10,000 simulated balance, synthetic price chart, new candle every 2 seconds. The goal is graduating users from complete beginner to professional trading discipline.
+
+The tech stack is React 19, TypeScript, Vite, Tailwind CSS, Shadcn/UI, Framer Motion, Wouter, Web Audio API, and a fully custom canvas chart renderer. Entirely client-side. No backend. No API calls.
+
+---
+
+## YOUR MISSION
+
+This app has a strong concept and partial implementation. Your job is to take everything that exists and make it genuinely world-class. Not "better than before." World-class. The kind of product a professional trader opens and immediately respects. The kind of product a complete beginner can open and immediately understand. Every feature described in this document must be fully implemented, visually polished, and correctly wired. Nothing stubbed. Nothing broken. Nothing missing.
+
+---
+
+## STEP 1 — FULL CODEBASE AUDIT
+
+Before writing any code, read every file completely. For each file produce internal notes covering: what it is supposed to do, what it actually does correctly, what is broken or incomplete, what is missing entirely, and what dependencies on other files are disconnected or mismatched. Pay specific attention to these known gaps:
+
+- RSI indicator exists in phase config but is not rendered on the chart
+- Volume bars exist in price data but are not rendered
+- Swing point annotations are referenced in phase configs but never drawn
+- No data persistence — refresh wipes all progress
+- No onboarding tour for first-time users
+- Breakout alerts and range detection UI referenced in phases 9 and 10 but not implemented
+- Challenge validation logic — verify it is actually checking real trade criteria and not just stubbed
+
+After the audit, write a complete execution plan listing every file you will change, what you will change, and in what order. Follow the plan exactly.
+
+---
+
+## STEP 2 — DATA PERSISTENCE (IMPLEMENT FIRST)
+
+This is the foundation everything else depends on. Implement a complete persistence layer using localStorage before fixing anything else.
+
+**What to save and restore:**
+- Current phase number and completion status of all phases
+- Current XP total and level
+- All completed achievements with unlock timestamps
+- Full trade journal — every trade ever closed, with all fields
+- Session statistics: total trades, win rate, best streak, current streak, discipline score history
+- User profile: display name, chosen trader archetype, total time in app
+- Chart preferences: zoom level, visible indicators, mute state
+- Current challenge progress — if mid-challenge on refresh, restore challenge state
+- Daily and weekly challenge completion state with last-reset timestamp
+
+**How it works:**
+- Auto-save triggers after every significant event: trade close, XP gain, phase advance, achievement unlock, challenge progress update
+- On app load: detect whether saved state exists. If yes, show a "Welcome back, [name]" screen with their stats summary and a "Continue" button. If no, show onboarding.
+- "New Journey" button in settings resets everything after a typed confirmation ("TYPE RESET TO CONFIRM")
+- All save/load logic lives in a dedicated `/src/lib/persistence.ts` module with typed interfaces for every saved object
+- Saving must never block the UI — use a debounced write that batches rapid successive saves into one write per 500ms
+
+---
+
+## STEP 3 — ONBOARDING (NEW USER FLOW)
+
+First-time users get a proper guided onboarding sequence before they see the trading interface:
+
+**Screen 1 — Welcome:** ARIA appears center screen large-format with her glitch entrance animation. She introduces herself and the app in 3 typewriter sentences. "Welcome to TradeSchool. I am ARIA — your Adaptive Risk Intelligence Agent. I will be with you every step of your journey from your first trade to professional-level execution."
+
+**Screen 2 — Name and Archetype:** User enters their display name (required, max 20 chars). Then chooses a trader archetype from three options displayed as cards with icons and descriptions:
+- **Scalper** — "You want fast trades, quick decisions, and constant action. I will keep my coaching sharp and direct."
+- **Swing Trader** — "You prefer reading the bigger picture, waiting for the right setup, and holding with conviction. I will coach you with patience and precision."
+- **Risk Manager** — "You care most about protecting capital, managing drawdown, and building consistent discipline. I will be your strictest coach."
+
+Archetype affects ARIA's tone, message frequency, and coaching emphasis throughout the entire app. Persist this choice.
+
+**Screen 3 — Quick Tour:** Five sequential tooltip overlays (Next button advances each) pointing at: the chart area, the ARIA panel, the trade controls, the phase progress indicator, and the XP bar. Each tooltip has a one-line explanation and ARIA delivers a matching voice message.
+
+**Screen 4 — Phase 1 Briefing:** ARIA delivers her full Phase 1 intro. The trading interface slides in beneath the briefing overlay. Tour ends, user is on the live chart, Phase 1 challenge card is visible. They know exactly what to do.
+
+---
+
+## STEP 4 — THE CHART (COMPLETE REBUILD)
+
+The chart is the heart of the app. Rebuild `CandlestickChart.tsx` to be a genuinely professional canvas chart.
+
+**Rendering architecture:**
+- Three canvas layers stacked absolutely: background layer (grid, S/R zones — redraws only when data changes), indicator layer (EMAs, RSI, volume — redraws on new candle), foreground layer (current candle animation, price line, crosshair, ARIA annotations — redraws every frame via requestAnimationFrame)
+- ResizeObserver handles container resize without breaking layout or losing scroll position
+
+**Candles:**
+- Bullish: #1D9E75 (teal-green). Bearish: #E24B4A (red). Doji: #8B95A8 (gray)
+- Every new candle animates: wick extends first over 150ms easeOut, body fills from open toward close over 200ms easeInOut using requestAnimationFrame — never setTimeout
+- Completed candle briefly flashes opacity 1→0.6→1 over 200ms on close to signal the close
+- Candle bodies have a very subtle 0.15 opacity fill version of their color as background to the full wick range, giving a volume-shadow effect
+
+**Current price line:**
+- Dashed horizontal line across full chart width at current price, updates every tick
+- Right-axis label box: teal background if price is above previous close, red if below
+- Label opacity breathes with a CSS keyframe animation (0.7 to 1.0, 2s cycle)
+- Price in the label uses JetBrains Mono or Fira Code, tabular-nums
+
+**Price axis:**
+- Right side, dark background panel, current price row highlighted with colored background matching trend direction
+- All prices in monospace tabular font
+- Horizontal grid lines at each price label in rgba(255,255,255,0.04)
+
+**Time axis:**
+- Bottom, shows time labels at sensible intervals based on current zoom level
+- Vertical grid lines at each time label in rgba(255,255,255,0.04)
+
+**Volume bars:**
+- Rendered at the bottom 15% of the main chart canvas, not a separate panel
+- Same color as the corresponding candle, 35% opacity
+- Animate in sync with candle body animation
+
+**EMAs:**
+- EMA 9: electric blue #378ADD, 1.5px, smooth bezier curve through midpoints
+- EMA 21: teal #1D9E75, 1.5px, smooth bezier curve
+- EMA 50: purple #7F77DD, 1.5px, smooth bezier curve (unlocked in Phase 7)
+- All EMAs fade in smoothly when first unlocked (opacity 0 to 1 over 500ms)
+
+**RSI panel (unlocked Phase 8):**
+- Separate sub-panel below main chart, 18% of total chart height, separated by a 1px border
+- RSI line in white, 1.5px
+- Overbought line at 70: red dashed
+- Oversold line at 30: green dashed  
+- Midline at 50: gray dashed
+- Current RSI value label on right axis
+- Background zones: above 70 has very subtle red tint, below 30 has very subtle green tint
+- Animates in from zero height when unlocked
+
+**Support and Resistance zones:**
+- Semi-transparent horizontal bands, not single lines
+- Support: rgba(29,158,117,0.1) fill, 1.5px solid teal left edge, "S" label on right with price
+- Resistance: rgba(226,76,74,0.1) fill, 1.5px solid red left edge, "R" label on right with price
+- Calculated from real pivot logic: a pivot high is a candle whose high is the highest of the 5 candles centered on it. A pivot low is a candle whose low is the lowest of the 5 candles centered on it. Cluster levels within 8 pips into one zone. Show top 3 support and top 3 resistance zones. Recalculate every 20 new candles.
+- Zones animate in with a fade when first detected
+
+**Swing point annotations (fix the missing implementation):**
+- Small triangles above swing highs (pointing down, teal), below swing lows (pointing up, red)
+- Visible for the last 10 swing points in current view
+- When ARIA is in teaching mode, these pulse to draw the user's attention
+
+**ARIA chart annotations (teaching mode):**
+- ARIA can draw directly on the chart canvas during phase briefings
+- Trend lines: drawn in amber #EF9F27, 1.5px, with a glowing effect
+- Pattern highlight rectangles: rounded rect border around specific candles in amber with 20% fill
+- Directional arrows: for entry signals, drawn in the appropriate direction in teal or red
+- All annotations fade out smoothly over 1 second after 8 seconds of display
+
+**Entry and exit lines on active trade:**
+- Entry price: solid horizontal line in white with "ENTRY" label and price on right axis
+- Stop loss: solid horizontal line in red with "SL" label and pip distance shown
+- Take profit: solid horizontal line in green with "TP" label and pip distance shown
+- Filled zone between entry and SL: rgba(226,76,74,0.06)
+- Filled zone between entry and TP: rgba(29,158,117,0.06)
+- All three lines animate in on trade open (slide in from right over 300ms)
+
+**Crosshair:**
+- Thin dashed white lines on hover, rgba(255,255,255,0.3)
+- Floating OHLCV tooltip card: dark glass background, top-left of chart, shows Open/High/Low/Close/Volume in monospace, date and time of hovered candle
+
+**Pan and zoom:**
+- Mouse wheel: zoom in/out centered on cursor position, 20 minimum to 200 maximum candles visible, smooth interpolation
+- Click and drag: pan left and right through candle history
+- Zoom and pan state persisted in a ref so it survives re-renders
+- When a new candle is added and user is at the right edge (current price visible), auto-scroll right to keep current price in view. If user has panned left to review history, do not force-scroll — let them review.
+
+**Chart header bar:**
+- Symbol: "XAU/USD" in monospace
+- Current price: large, monospace, color-coded by tick direction (flash teal on up tick, red on down tick)
+- Bid/ask spread shown in small muted text
+- Market regime badge: "UPTREND ↑" in teal, "DOWNTREND ↓" in red, "RANGE ◆" in amber, "BREAKOUT ⚡" in electric blue — updates in real time
+
+---
+
+## STEP 5 — PRICE ENGINE (COMPLETE REBUILD)
+
+Rebuild `chartEngine.ts` to produce XAU/USD-like price action that feels real:
+
+**Market regimes:**
+- UPTREND: Positive drift 0.3–0.8 pips per candle average. Pullbacks of 3–7 candles that do NOT break the last swing low. After each pullback, new high is made. Structure is visually clear: genuine higher highs and higher lows.
+- DOWNTREND: Mirror of uptrend. Genuine lower highs and lower lows.
+- RANGE: Price oscillates between two defined boundaries 15–30 pips apart. Mean reversion bias. Wicks extend toward boundaries and reject. Occasionally false breaks by 2–3 pips before returning.
+- BREAKOUT: Triggered from a range when price approaches boundary with 3 consecutive candles in the breakout direction. Sharp 20–35 pip move over 4–6 candles, then a retest of the broken level (price returns to within 3 pips of breakout level) before continuing.
+- VOLATILE: Short regime 8–15 candles. High ATR, large wicks, no clear direction. Appears during news events.
+
+**Regime transitions:**
+- Never abrupt. A 10–15 candle transition period between regimes where characteristics of both appear.
+- The current regime and candles remaining in it are tracked in engine state and exposed to the UI.
+
+**Volatility clustering:**
+- ATR (Average True Range) varies organically. Quiet periods (small candles, tight wicks) transition gradually into expansion (large candles, extended wicks). Never mechanical uniform randomness.
+
+**News spike events:**
+- Every 50–80 candles, a news event triggers.
+- 3 candles before the spike, ATR increases slightly and ARIA warns "Volatility event detected — consider waiting for the move to complete before entering."
+- The spike itself: 20–40 pip move in a random direction over 2–3 candles.
+- Followed by 50% partial retracement over the next 4–6 candles.
+- A "NEWS" label appears on the chart at the spike candle.
+
+**S/R calculation:**
+- Pure pivot logic as described in chart section above.
+- Recalculate every 20 candles.
+- Expose as a clean function that returns an array of SRZone objects with: price, type (support/resistance), strength (how many times tested), and first detected timestamp.
+
+---
+
+## STEP 6 — ARIA (COMPLETE OVERHAUL)
+
+ARIA is the emotional and educational core of the app. She must feel like an intelligent, responsive presence — not a message logger.
+
+**Visual:**
+- Fixed bottom-right panel, always visible, sci-fi aesthetic
+- Dark glass panel: background rgba(7,11,20,0.92), backdrop-filter blur(16px), border 1px solid rgba(29,158,117,0.3)
+- Avatar: 52px circle with animated border that breathes continuously (CSS keyframe, 3s cycle, border-color transitions between 0.4 and 1.0 opacity)
+- Avatar color by state: teal #1D9E75 for Teaching/Neutral, amber #EF9F27 for Caution, red #E24B4A for Danger, green #22C55E for Celebration
+- State transitions: smooth color transition over 600ms, not instant
+- Glitch entrance animation on first load and each phase unlock: avatar rapidly shifts position by 3px left, 3px right, settles, scan-line effect passes across avatar over 400ms total
+- "ARIA" label in teal monospace above avatar, small "ONLINE" status dot (green pulsing)
+- Collapsed/expanded toggle: clicking avatar collapses to avatar-only mode, click again to expand
+
+**Messages:**
+- Every single message uses typewriter animation: characters appear at 35ms intervals
+- Never dump full text instantly under any circumstance
+- Message history: last 10 messages visible in scrollable area, older messages progressively fade to lower opacity
+- Each message has a timestamp (relative: "just now", "2m ago") and a colored tag badge: LEARN (blue), ACTION (teal), REVIEW (purple), WARN (amber), DANGER (red)
+- Messages scroll automatically to the newest, but user can scroll up to review history
+
+**When ARIA speaks (all triggers must fire):**
+- App first load: Phase briefing for current phase
+- Trade opened: Acknowledges the trade direction, comments on setup quality
+- Trade closed win: Specific congratulations referencing what was done correctly
+- Trade closed loss: Specific analysis of what happened, what to learn from it
+- Every 10–15 seconds during an open trade: Live commentary specific to current chart state
+- Market regime change: Announces the new regime and what it means for the current phase challenge
+- SL about to be hit (within 3 pips): "Your stop is close. This is the plan working — let it do its job."
+- TP about to be hit (within 3 pips): "Target in reach. Don't close early. Trust the setup."
+- Phase complete: Full celebration speech
+- Level up: Short congratulatory message with archetype-specific tone
+- Achievement unlock: Brief acknowledgment
+- Revenge trading detected: Red mode speech, specific and firm
+- Cooldown active: Countdown acknowledgment, then check-in at cooldown end
+- News event warning: 3-candle advance warning before spike
+- User idle for 60 seconds with no trade open: Gentle prompt relevant to current phase
+
+**Archetype-specific tone:**
+- Scalper: Short sentences. Direct. Fast. "Good entry. Tight SL. Now wait." Never long paragraphs.
+- Swing Trader: Measured. Strategic. "This setup has confluence. EMA, S/R, and momentum all align. Hold your conviction."
+- Risk Manager: Analytical. Precise. Always references numbers. "Risk on this trade is 0.8% of balance. Within parameters. Proceed."
+
+**Revenge trading detection:**
+- Track timestamps of last 5 closed trades
+- If 3 or more are losses AND the time between consecutive losses is under 4 minutes each: trigger Danger mode
+- Disable BUY and SELL buttons immediately
+- Show a countdown timer on both buttons (45 seconds)
+- ARIA turns red, delivers intervention speech
+- After cooldown expires: ARIA turns teal, delivers a reset speech, buttons re-enable
+
+**Behavioral detection beyond revenge trading:**
+- No SL set when attempting to submit: ARIA turns amber, blocks submission, explains why SL is mandatory
+- Risk over 2%: ARIA turns amber, shows exact calculation, suggests correct lot size
+- User moving SL further from price while losing (widening stop): ARIA detects this on SL field change, turns red, warns "Moving your stop to avoid a loss is one of the most dangerous habits in trading. The plan does not change mid-trade."
+- User closing a winning trade too early (before TP is hit, while in profit, with more than 5 pips to TP): ARIA gently notes "You closed early. Your target was [X] pips away. Over many trades, cutting winners short destroys your R:R edge."
+
+---
+
+## STEP 7 — PHASES (ALL 12 COMPLETE)
+
+Every phase must have all of the following fully defined and actually wired to the engine and UI. No stubs. No "coming soon."
+
+Each phase object must contain:
+- `id`, `number`, `title`, `subtitle` — one compelling sentence about what this trader will become
+- `ariaIntroMessage` — ARIA's full briefing for this phase, 3 sentences minimum, specific and motivating, archetype-aware
+- `ariaWatchMessages` — array of minimum 8 specific live commentary messages used while a trade is open during this phase. Each must reference phase-relevant concepts.
+- `conceptDiagram` — identifier for which canvas annotation sequence ARIA draws at phase start
+- `challenge` — complete object with: `title`, `description`, `criteria` array (each criterion is a machine-readable condition object), `xpReward`, `successMessage`, `failureMessage` (specific, references what was missing)
+- `tips` — array of 3 pro trader tips shown in the sidebar during this phase
+- `unlocksFeatures` — array of feature flag strings that activate when this phase begins
+- `requiredXP` — XP needed to unlock
+
+The 12 phases and their exact challenges:
+
+**Phase 1 — Market Orientation:** Open and close any BUY trade. XP: 50.
+**Phase 2 — Candlestick Reading:** Open a trade and hold it for at least 3 candles before closing. XP: 75.
+**Phase 3 — Trend Recognition:** During an uptrend regime, open a BUY trade and close it in profit. XP: 100.
+**Phase 4 — Support and Resistance:** Open a trade within 5 pips of an active S/R zone with a stop loss set. XP: 150.
+**Phase 5 — Entry Timing:** Open a trade with both SL and TP set, TP at minimum 1.5× the SL distance (1.5:1 R:R). XP: 200.
+**Phase 6 — Risk Management:** Complete 3 trades where every single one has a stop loss set AND risk per trade is under 2% of current balance. All 3 must be completed in one session attempt. XP: 300.
+**Phase 7 — EMA Confluence:** Open a BUY trade when EMA 9 is above EMA 21 (uptrend confirmed by EMA cross), with a stop loss set. XP: 350.
+**Phase 8 — RSI Divergence:** Open 2 trades with stop losses that both close in profit. RSI panel is now visible. XP: 400.
+**Phase 9 — Breakout Trading:** During a BREAKOUT regime event, open a trade in the breakout direction with a 2:1 R:R minimum. XP: 500.
+**Phase 10 — Range Trading:** During a RANGE regime, open 2 trades from S/R zone bounces (within 5 pips of a zone) that both close in profit. XP: 500.
+**Phase 11 — Trade Psychology:** Complete 5 consecutive trades with stop losses set, no revenge trading detected, no SL widening detected, no early close detected on winning trades. XP: 600.
+**Phase 12 — Pro Simulation:** Complete 10 trades in one session. At the end: win rate must be 60% or higher, every trade must have had a stop loss, no trade may have exceeded 2% risk, no revenge trading may have been detected. XP: 1000.
+
+Challenge criteria must be machine-readable condition objects that the engine evaluates on each trade close. Example structure:
+```typescript
+interface ChallengeCriterion {
+  id: string
+  description: string
+  check: (trade: ClosedTrade, sessionContext: SessionContext) => boolean
+  isMet: boolean
+}
+```
+
+---
+
+## STEP 8 — GAMIFICATION (COMPLETE AND POLISHED)
+
+**XP and Leveling:**
+- XP sources: Trade open +5, Win +15, Loss +3, Achievement +25, Phase complete +50 to +1000 (scales by phase)
+- Level thresholds scale ×1.3 each level: 100, 130, 169, 220...
+- On XP gain: floating "+[N] XP" text animates upward from XP bar and fades over 1 second
+- XP bar fill animates over 600ms with a shimmer sweep passing left to right on each gain
+- On level up: bar fills to 100%, white flash, resets, ARIA delivers level-up message, level badge in header animates with a scale pulse
+
+**Achievements — expand to 15 minimum:**
+
+| Achievement | Condition | XP |
+|---|---|---|
+| First Steps | Place first trade | 25 |
+| In the Green | Close a profitable trade | 25 |
+| Getting Started | Complete 5 trades | 25 |
+| Hot Streak | 3 profitable trades in a row | 50 |
+| Risk Manager | Use SL on 5 consecutive trades | 50 |
+| Ice Veins | Hold a trade to SL without closing early | 50 |
+| Apprentice | Reach Level 5 | 50 |
+| Trend Spotter | Complete Phase 3 | 50 |
+| Risk Guardian | Complete Phase 6 | 75 |
+| Precision Entry | Enter within 3 pips of an S/R zone | 75 |
+| Diamond Hands | Hold a profitable trade for 15+ candles | 75 |
+| Revenge Proof | End a session after 2 losses without a third | 75 |
+| EMA Master | Complete Phase 7 | 100 |
+| Breakout Hunter | Complete Phase 9 | 100 |
+| Pro Trader | Complete all 12 phases | 500 |
+
+- Achievement toast: slides in from top-right, 4 seconds, slides out. Achievement icon does a single 360° spin on entry. Queue system — never show more than 2 simultaneously.
+- Each achievement has a unique icon, name, description, and XP reward shown in toast and in achievements panel.
+
+**Streaks:**
+- Track consecutive profitable trade count (streak resets on any loss or any trade without SL)
+- Current streak shown in header with a flame icon
+- Streak milestones at 3, 5, 10 trigger ARIA commentary and a subtle visual celebration
+- Best streak saved to profile and shown in session end screen
+
+**Discipline Score:**
+- 0–100 score calculated as weighted combination:
+  - SL usage rate: 30% weight
+  - Average R:R achieved: 25% weight
+  - Revenge trading incidents (0 = full score): 25% weight
+  - Early close frequency on winning trades: 20% weight
+- Shown in Stats panel with a breakdown bar for each component
+- Updates after every trade close
+- Shown prominently in session end screen with ARIA's written verdict on the score
+
+**Daily and Weekly Challenges:**
+- 3 daily challenges reset every 24 hours (tracked by stored timestamp in localStorage)
+- 1 weekly challenge resets every 7 days
+- Examples: "Execute 3 trades with SL today", "Achieve 2:1 R:R on 2 trades", "Complete a trade during a breakout", "End the day with positive P&L"
+- Shown in left panel with progress bars
+- Completing all daily challenges gives a daily bonus of +100 XP
+
+---
+
+## STEP 9 — TRADE PANEL (FULLY FUNCTIONAL)
+
+**Lot size:**
+- Synchronized slider (0.01 to 5.0) and number input — moving either updates the other instantly
+- Below: shows calculated risk in dollars and as % of balance in real time
+- Color coded: green if under 1%, amber if 1–2%, red if above 2%
+- Suggested lot size button: "Use 1% risk" auto-calculates correct lot size for exactly 1% risk given current SL distance
+
+**Stop Loss:**
+- Number input showing price level
+- Auto-suggested: ATR-based distance + nearest S/R zone on appropriate side
+- Shows pip distance from current price in small muted text below
+- Drawing updates on chart in real time as user types
+
+**Take Profit:**
+- Number input showing price level
+- Auto-suggested: exactly 2:1 R:R based on current SL distance
+- Shows pip distance from current price and R:R ratio
+- Drawing updates on chart in real time as user types
+
+**R:R visualization bar:**
+- Two segments: red segment for SL distance, green segment for TP distance
+- Ratio label: "2.0 : 1" in monospace
+- Updates live as SL and TP change
+- Turns amber if R:R is below 1:1, red if below 0.5:1
+
+**Buy and Sell buttons:**
+- BUY: teal background, white text, subtle glow on hover
+- SELL: red background, white text, subtle glow on hover
+- Both disabled during cooldown with countdown timer shown and tooltip "ARIA cooldown active — [N]s remaining"
+- Both disabled during ARIA teaching annotation sequence with tooltip "ARIA is demonstrating — wait for lesson to complete"
+- Submission blocked (not just warned) if: no SL set (Phase 4+), risk over 5% (hard limit always)
+
+**Open trade display:**
+- Replaces Buy/Sell buttons while trade is open
+- Shows: direction badge (BUY/SELL), entry price, current price, pip distance, unrealized P&L in dollars updating every tick
+- P&L number color: teal when positive, red when negative, pulses on significant moves
+- "Close Trade" button: red, requires a single click (no confirmation dialog — speed matters in trading)
+- Time in trade shown in seconds/minutes
+
+**Journal tab:**
+- Scrollable list of all closed trades, newest first
+- Each entry: direction badge, entry/exit price, pips gained/lost, PnL in dollars, R:R achieved, SL used (yes/no), duration, ARIA's one-line verdict
+- Color coded row: subtle green tint for winners, subtle red tint for losers
+- Filter buttons: All, Winners, Losers, No SL (shows undisciplined trades)
+- Total stats at top: total trades, win rate, total PnL, average R:R
+
+---
+
+## STEP 10 — SESSION END SCREEN
+
+Triggered after Phase 12 challenge completion or manual "End Session" button:
+
+Full-screen overlay with:
+- Session title: "Session Complete" with phase number
+- Grid of stats: Total Trades, Win Rate, Best Trade (pips), Worst Trade (pips), Biggest Drawdown, Average R:R, Longest Streak, Time Traded
+- Discipline Score card: large number 0–100, breakdown bars for each component
+- ARIA's Session Verdict: 3 sentences, specific to actual behavior this session. References the user by name. References specific numbers from the session. Archetype-aware tone.
+- XP earned this session (animated count-up)
+- Achievements unlocked this session (shown as icons with names)
+- Three buttons: "Trade Again" (new session, same phase), "Review Journal" (closes overlay, opens journal tab), "Next Phase" (if phase challenge was completed — highlighted in teal)
+
+---
+
+## STEP 11 — ANIMATIONS (ALL REQUIRED)
+
+Use Framer Motion for component entry/exit. CSS keyframes for continuous effects. requestAnimationFrame for canvas.
+
+Every animation listed here must be implemented:
+
+- **App entrance**: Top bar slides down, left panel slides left, right panel slides right, chart area fades in. All 400ms easeOut, staggered 50ms apart.
+- **ARIA entrance**: Slides up from bottom, scales 0.85→1.0, glitch effect plays on avatar. Duration 500ms.
+- **ARIA state change**: Avatar border color transitions over 600ms. Glow intensity changes.
+- **ARIA message**: Typewriter character by character at 35ms per character.
+- **Phase unlock cinematic**: Full-screen dark overlay. 50 small teal particles animate outward from center over 1 second. Phase number and title type themselves in large text center-screen. ARIA appears in large format center with her briefing. Auto-dismisses after 5.5 seconds or on click. Triumphant sound plays.
+- **Challenge card flip**: On challenge complete, card does a CSS 3D rotateY 180° flip revealing green success face with ARIA success message and XP earned. Duration 600ms.
+- **XP gain**: Shimmer sweep across XP bar. "+[N] XP" floats up from bar and fades. Duration 1 second total.
+- **Level up**: XP bar fills white, pauses 300ms, resets. Screen vignette pulses teal once (rgba(29,158,117,0.1) overlay fades in and out over 500ms).
+- **Trade open**: Entry line, SL line, and TP line slide in from the right edge of chart over 300ms.
+- **Trade close win**: Green particles burst from the P&L display. P&L number does a count-up to final value. Screen vignette pulses teal once.
+- **Trade close loss**: Screen vignette pulses red once (rgba(226,76,74,0.1) over 500ms). P&L number does a count-down to final value.
+- **Achievement toast**: Slides in from top-right (x: 100%→0 over 300ms). Icon spins 360° over 500ms. Stays 4 seconds. Slides back out (x: 0→100% over 300ms).
+- **Candle close flash**: Completed candle flickers opacity 1→0.6→1 over 200ms.
+- **Cooldown button**: Animated border that depletes clockwise around the button like a countdown ring (SVG stroke-dashoffset animation).
+- **Discipline score update**: Score number animates count up or down to new value over 500ms.
+- **Streak milestone**: At 3, 5, 10 streak — flame icon next to streak count grows and pulses for 2 seconds.
+- **News spike warning**: Chart header flashes amber 3 times before news event. "⚠ VOLATILITY EVENT" badge appears in header.
+
+---
+
+## STEP 12 — SOUND (FULL IMPLEMENTATION)
+
+All sounds synthesized via Web Audio API — no external audio files. Every sound must be implemented:
+
+- **Candle tick** (every 2 seconds): Sine wave, 800hz, 25ms, gain 0.03 — barely audible, just present
+- **Trade open**: Two ascending tones: 440hz (80ms) then 550hz (80ms), sine wave, gain 0.15
+- **Trade close win**: Three-note ascending arpeggio: 523hz, 659hz, 784hz, 80ms each, sine, gain 0.2
+- **Trade close loss**: Two descending tones: 440hz then 330hz, 120ms each, sawtooth wave softened, gain 0.15
+- **Phase unlock**: Frequency sweep 300→1200hz over 200ms, then held tone 800hz for 400ms, sine, gain 0.25
+- **Level up**: Sparkle arpeggio: 659, 784, 1047, 1319hz, 60ms each, triangle wave, gain 0.2
+- **Achievement**: Bell tone: 1047hz, 200ms, sine with fast attack and long decay (0.8s), gain 0.2
+- **ARIA warning**: Two low pulses: 220hz, 120ms each, 150ms apart, sine, gain 0.2
+- **News spike alert**: Three rapid ascending beeps: 440, 550, 660hz, 60ms each, 80ms apart, gain 0.2
+- **Cooldown end**: Soft ascending two-tone: 440hz then 660hz, 100ms each, sine, gain 0.15
+
+Global mute toggle: button in header with speaker icon. State persisted in localStorage. Toggling immediately stops any currently playing sound.
+
+---
+
+## STEP 13 — LAYOUT AND OVERALL STRUCTURE
+
+Three-column layout, 100vh, no outer scroll.
+
+**Top bar (48px height):**
+- Left: "TSS" logo in teal monospace + "TradeSchool" small text
+- Center-left: Phase badge pill ("PHASE 3 — TREND RECOGNITION") with teal glow border, pulses on change
+- Center: Level badge + XP bar (120px wide, shimmer animation) + level number
+- Right: Streak counter with flame icon, Trade count, Win rate, P&L in monospace (teal if positive, red if negative), Mute button, Settings gear
+
+**Left panel (240px wide, full height minus top bar):**
+- Phase progress list: all 12 phases, completed in teal with checkmark, active highlighted, locked dimmed with lock icon. Clicking an unlocked phase shows its curriculum info in a tooltip.
+- "Skill Tree" button opens full-screen skill tree modal
+- Daily challenges section at bottom with progress bars and reset countdown
+
+**Chart area (fills remaining width, full height minus top bar minus trade controls bar):**
+- Chart canvas fills this area with 12px padding
+- Chart header bar above canvas: symbol, price, bid/ask, regime badge
+
+**Trade controls bar (below chart, 88px height):**
+- When no open trade: shows current challenge summary in small text + "Ready" indicator
+- When trade is open: shows open trade live display (entry, current price, PnL, pip distance, close button)
+
+**Right panel (300px wide, full height minus top bar):**
+- Three tabs: Trade, Stats, Journal
+- All three fully implemented as described above
+
+**ARIA panel (fixed, bottom-right, overlays layout):**
+- Always on top of everything except modals
+- Width 320px, maximum height 420px
+- Collapsible
+
+**Modals (full-screen overlays):**
+- Skill Tree modal
+- Phase unlock cinematic
+- Session end screen
+- Settings modal (mute toggle, reset progress, display name change, archetype change)
+- Onboarding flow
+
+**Minimum width: 1280px.** Below this, show a centered message: "TradeSchool requires a minimum screen width of 1280px for the full trading experience." No mobile layout.
+
+---
+
+## STEP 14 — SETTINGS MODAL
+
+Accessible from gear icon in top bar. Contains:
+
+- **Display name**: Editable text field, saves on blur
+- **Trader archetype**: Three clickable cards to change archetype. Changing archetype triggers a confirmation dialog: "Changing your archetype will update ARIA's coaching style. Your progress will not be affected. Continue?"
+- **Sound**: Toggle on/off. Volume slider 0–100%.
+- **Chart preferences**: Toggle volume bars, toggle swing point annotations, candle speed (1s / 2s / 3s per candle)
+- **Dev mode**: "Ctrl+Shift+D to unlock dev mode" — when active, shows "DEV MODE ACTIVE" badge in header, Skip Phase button appears, Fill XP button appears
+- **Reset Progress**: Red button, requires typing "RESET" to confirm, clears all localStorage and reloads to onboarding
+
+---
+
+## STEP 15 — FINAL QUALITY CHECKLIST
+
+Before calling anything complete, every item on this list must pass:
+
+- [ ] Refresh the page — all progress restores exactly. Phase, XP, trades, achievements, challenge progress all intact.
+- [ ] Open app as new user — onboarding flows completely without errors, archetype is saved, name is saved, Phase 1 begins correctly.
+- [ ] Every phase challenge validates against real criteria — test Phase 1 through Phase 6 manually.
+- [ ] ARIA appears on every phase, delivers a typewriter message, never shows raw text dumps.
+- [ ] ARIA commentary during open trade is specific to chart state — not generic.
+- [ ] Revenge trading cooldown triggers after 3 losses in 10 minutes — buttons lock, timer counts down, ARIA turns red.
+- [ ] SL submission block works — attempting to submit without SL in Phase 4+ is impossible.
+- [ ] Chart pan and zoom work — can drag history, zoom in/out, auto-scroll resumes when at right edge.
+- [ ] All EMAs render as smooth curves and fade in when first unlocked.
+- [ ] RSI panel appears and renders correctly when Phase 8 is reached.
+- [ ] S/R zones render as bands with pivot-calculated levels, update every 20 candles.
+- [ ] Volume bars render in sync with candles.
+- [ ] Swing point annotations appear and pulse during teaching mode.
+- [ ] ARIA teaching annotations draw on chart and fade after 8 seconds.
+- [ ] Entry, SL, and TP lines draw on chart when trade is open.
+- [ ] Phase unlock cinematic plays on phase completion — particles, title, ARIA speech.
+- [ ] XP animates on every gain — shimmer, floating text.
+- [ ] Level up sequence plays correctly.
+- [ ] All 15 achievements unlock under correct conditions.
+- [ ] Achievement toasts slide in, queue correctly, never overlap more than 2.
+- [ ] Daily challenges reset by timestamp and show correct progress.
+- [ ] Discipline score updates after every trade and reflects real behavior.
+- [ ] Session end screen shows accurate statistics derived from real trade data.
+- [ ] All 10 sounds play correctly and mute toggle silences all of them immediately.
+- [ ] Mute state persists across refresh.
+- [ ] Settings modal opens, all settings save and apply immediately.
+- [ ] Dev mode Ctrl+Shift+D works — unlocks all phases, skip phase button works.
+- [ ] No TypeScript errors. No console errors. No crashes on any user action.
+- [ ] Layout holds at exactly 1280px minimum width without overflow or visual breakage.
+- [ ] First-time user can complete Phase 1 without any confusion about what to do next.
+
+---
+
+## YOUR STANDARD
+
+You are not done when the features are present. You are done when a first-time user opens this app, sees ARIA appear with personality, sees a beautiful live chart, immediately understands what they need to do, executes their first trade, receives specific intelligent feedback from ARIA, watches XP flow in with animation, and feels like they are using a product that was built by people who care deeply about both trading and software craft. And when they come back tomorrow, everything they did yesterday is still there.
+
+That is the standard. Begin with the full audit. Read everything. Write your findings. Then execute.
+
+---
