@@ -99,6 +99,7 @@ export interface TradingEngineState {
   lessonProgress: LessonProgress;
   devMode: boolean;
   candleTickCount: number;
+  simSpeedMultiplier: 1 | 2 | 5 | 10;
 }
 
 export interface TradingEngineActions {
@@ -117,13 +118,15 @@ export interface TradingEngineActions {
   setLessonProgress: (lp: LessonProgress | ((prev: LessonProgress) => LessonProgress)) => void;
   setAriaMode: (mode: AriaMode) => void;
   setMuted: (muted: boolean) => void;
+  setSimSpeedMultiplier: (mult: 1 | 2 | 5 | 10) => void;
 }
 
 export function useTradingEngine(): TradingEngineState & TradingEngineActions {
   const savedRef = useRef(loadState());
   const saved = savedRef.current;
 
-  const [candles, setCandles] = useState<Candle[]>(() => generateInitialCandles(60));
+  const [candles, setCandles] = useState<Candle[]>(() => generateInitialCandles(2000));
+  const [simSpeedMultiplier, setSimSpeedMultiplierState] = useState<1 | 2 | 5 | 10>(1);
   const [trades, setTrades] = useState<Trade[]>(() => saved?.trades ?? []);
   const [activeTrade, setActiveTrade] = useState<Trade | null>(null);
   const [coachMessages, setCoachMessages] = useState<CoachMessage[]>(() => getWelcomeMessages());
@@ -413,10 +416,17 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
     setTakeProfit(null);
   }, [currentPrice, lessonProgress.currentModuleId, addCoachMessage, addXp, unlockAchievement, triggerCooldown]);
 
+  const simSpeedRef = useRef<1 | 2 | 5 | 10>(1);
+  const setSimSpeedMultiplier = useCallback((mult: 1 | 2 | 5 | 10) => {
+    simSpeedRef.current = mult;
+    setSimSpeedMultiplierState(mult);
+  }, []);
+
   // Price tick
   useEffect(() => {
     if (isPaused) return;
-    const speedMs = lessonProgress.candleSpeedMs ?? 2000;
+    const baseMs = lessonProgress.candleSpeedMs ?? 2000;
+    const speedMs = Math.max(100, Math.floor(baseMs / simSpeedRef.current));
     const interval = setInterval(() => {
       tickRef.current++;
       setCandleTickCount(t => t + 1);
@@ -437,14 +447,14 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
             const slHit = type === 'buy' ? price <= sl : price >= sl;
             if (slHit) {
               setTimeout(() => closeTrade(sl), 30);
-              return [...prev.slice(-120), newCandle];
+              return [...prev.slice(-4000), newCandle];
             }
           }
           if (tp !== undefined) {
             const tpHit = type === 'buy' ? price >= tp : price <= tp;
             if (tpHit) {
               setTimeout(() => closeTrade(tp), 30);
-              return [...prev.slice(-120), newCandle];
+              return [...prev.slice(-4000), newCandle];
             }
           }
 
@@ -455,11 +465,11 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
             : null;
         }
 
-        return [...prev.slice(-120), newCandle];
+        return [...prev.slice(-4000), newCandle];
       });
     }, speedMs);
     return () => clearInterval(interval);
-  }, [isPaused, closeTrade, lessonProgress.candleSpeedMs]);
+  }, [isPaused, closeTrade, lessonProgress.candleSpeedMs, simSpeedMultiplier]);
 
   // Cooldown countdown
   useEffect(() => {
@@ -639,5 +649,7 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
     setLessonProgress,
     setAriaMode,
     setMuted: setMutedWithSound,
+    simSpeedMultiplier,
+    setSimSpeedMultiplier,
   };
 }

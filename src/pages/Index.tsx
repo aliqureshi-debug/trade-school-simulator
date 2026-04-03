@@ -29,7 +29,7 @@ const Index = () => {
     unrealizedPnl, srZones, newAchievement, isPaused, ariaMode,
     cooldownSeconds, xpGain, tradeResult, ema9, ema21,
     lotSize, stopLoss, takeProfit, newsEvent, muted, lessonProgress,
-    devMode, candleTickCount,
+    devMode, candleTickCount, setSimSpeedMultiplier,
     setIsPaused, openTrade, closeTrade, setLotSize, setStopLoss, setTakeProfit,
     devUnlockAll, resetProgress, toggleMute, addCoachMessage, addXp,
     unlockAchievement, setLessonProgress, setAriaMode, setMuted,
@@ -408,10 +408,10 @@ const Index = () => {
               entryPrice={activeTrade?.entryPrice}
               stopLoss={activeTrade?.stopLoss ?? stopLoss}
               takeProfit={activeTrade?.takeProfit ?? takeProfit}
-              ema9={ema9}
-              ema21={ema21}
               annotations={activeAnnotations}
               dimForLesson={isLessonActive}
+              activeTrade={activeTrade}
+              onSimSpeedChange={(mult) => setSimSpeedMultiplier(mult as 1 | 2 | 5 | 10)}
             />
 
             {isLessonActive && activeLesson && (
