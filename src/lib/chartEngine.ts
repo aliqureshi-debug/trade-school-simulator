@@ -40,6 +40,8 @@ let newsDirection: 'up' | 'down' = 'up';
 let newsSpikeAmount = 0;
 let newsSpikePerCandle = 0;
 let newsRetracementPerCandle = 0;
+let lastSpikeDuration = 3;       // track so idle gap = target - spike - retracement
+let lastRetracementDuration = 5;
 
 // Simulated time: start from 24 hours ago so history covers a full day
 let simTime = Date.now() - 2000 * 60 * 1000; // 2000 minutes ago
@@ -52,21 +54,26 @@ function resetNewsState(): void {
   newsSpikeAmount = 0;
   newsSpikePerCandle = 0;
   newsRetracementPerCandle = 0;
+  lastSpikeDuration = 3;
+  lastRetracementDuration = 5;
 }
 
 function advanceNewsEvent(): number {
   if (newsPhase === 'idle') {
     nextNewsCountdown--;
     if (nextNewsCountdown <= 3 && nextNewsCountdown > 0) {
+      // Pre-warning: prepare spike params so UI can show countdown
       newsDirection = Math.random() > 0.5 ? 'up' : 'down';
-      newsSpikeAmount = 0.5 + Math.random() * 1.5; // $0.50 - $2.00 spike
+      // 20-40 pip spike at $0.01/pip = $0.20–$0.40
+      newsSpikeAmount = 0.20 + Math.random() * 0.20;
       newsPhase = 'preWarning';
       newsPhaseCountdown = nextNewsCountdown;
     } else if (nextNewsCountdown <= 0) {
       newsDirection = Math.random() > 0.5 ? 'up' : 'down';
-      newsSpikeAmount = 0.5 + Math.random() * 1.5;
-      const spikeCandlesTotal = 2 + Math.floor(Math.random() * 2);
+      newsSpikeAmount = 0.20 + Math.random() * 0.20;
+      const spikeCandlesTotal = 2 + Math.floor(Math.random() * 2); // 2-3 candles
       newsSpikePerCandle = newsSpikeAmount / spikeCandlesTotal;
+      lastSpikeDuration = spikeCandlesTotal;
       newsPhase = 'spike';
       newsPhaseCountdown = spikeCandlesTotal;
     }
@@ -78,6 +85,7 @@ function advanceNewsEvent(): number {
     if (newsPhaseCountdown <= 0) {
       const spikeCandlesTotal = 2 + Math.floor(Math.random() * 2);
       newsSpikePerCandle = newsSpikeAmount / spikeCandlesTotal;
+      lastSpikeDuration = spikeCandlesTotal;
       newsPhase = 'spike';
       newsPhaseCountdown = spikeCandlesTotal;
     }
@@ -88,8 +96,9 @@ function advanceNewsEvent(): number {
     newsPhaseCountdown--;
     const bias = newsDirection === 'up' ? newsSpikePerCandle : -newsSpikePerCandle;
     if (newsPhaseCountdown <= 0) {
-      const retracementTotal = 4 + Math.floor(Math.random() * 3);
+      const retracementTotal = 4 + Math.floor(Math.random() * 3); // 4-6 candles
       newsRetracementPerCandle = (newsSpikeAmount * 0.5) / retracementTotal;
+      lastRetracementDuration = retracementTotal;
       newsPhase = 'retracement';
       newsPhaseCountdown = retracementTotal;
     }
@@ -100,8 +109,11 @@ function advanceNewsEvent(): number {
     newsPhaseCountdown--;
     const bias = newsDirection === 'up' ? -newsRetracementPerCandle : newsRetracementPerCandle;
     if (newsPhaseCountdown <= 0) {
+      // Schedule next event so start-to-start = 50-80 candles:
+      // idle gap = target - spike duration - retracement duration
+      const targetInterval = 50 + Math.floor(Math.random() * 31);
+      nextNewsCountdown = Math.max(10, targetInterval - lastSpikeDuration - lastRetracementDuration);
       newsPhase = 'idle';
-      nextNewsCountdown = 50 + Math.floor(Math.random() * 31);
     }
     return bias;
   }
