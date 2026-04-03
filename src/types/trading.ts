@@ -195,3 +195,50 @@ export interface SessionResult {
   worstTrade: number;
   xpEarned: number;
 }
+
+export interface SwingPoint {
+  index: number;
+  price: number;
+  type: 'high' | 'low';
+  strength: number;
+}
+
+export interface ChallengeCriterion {
+  id: string;
+  description: string;
+  check: (trade: Trade, context: {
+    allTrades: Trade[];
+    balance: number;
+    regime: MarketCondition;
+    consecutiveCount: number;
+  }) => boolean;
+}
+
+export interface DisciplineScore {
+  stopLossAdherence: number;
+  rrCompliance: number;
+  revengeTradingPenalty: number;
+  patientEntry: number;
+  overallScore: number;
+}
+
+export interface DailyChallenge {
+  id: string;
+  title: string;
+  description: string;
+  criteria: ChallengeCriterion[];
+  xpReward: number;
+  expiresAt: number;
+  completed: boolean;
+}
+
+export interface WeeklyChallenge {
+  id: string;
+  title: string;
+  description: string;
+  dailyChallenges: DailyChallenge[];
+  xpReward: number;
+  expiresAt: number;
+  completed: boolean;
+  daysCompleted: number;
+}

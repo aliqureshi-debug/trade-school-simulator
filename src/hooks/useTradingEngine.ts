@@ -580,6 +580,8 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
     setTakeProfit(null);
     setLessonProgress(buildDefaultLessonProgress());
     tradeCooldownTriggered.current = false;
+    setMuted(false);
+    sound.setMuted(false);
     setCoachMessages(getWelcomeMessages());
   }, []);
 
