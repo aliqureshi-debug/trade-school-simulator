@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Candle, Trade, CoachMessage, PlayerStats, Achievement, AriaState, SRZone, NewsEvent } from '@/types/trading';
+import { Candle, Trade, CoachMessage, PlayerStats, Achievement, AriaMode, SRZone, NewsEvent, LessonProgress } from '@/types/trading';
 import {
   generateInitialCandles,
   generateNextCandle,
@@ -11,20 +11,18 @@ import {
 } from '@/lib/chartEngine';
 import {
   getWelcomeMessages,
-  getMarketConditionMessage,
+  getAriaMode,
   getTradeOpenMessage,
   getTradeCloseMessage,
-  detectAriaState,
   getOpenTradeCommentary,
   getRevengeTradingMessage,
+  getCooldownEndMessage,
   getLevelUpMessage,
-  getChallengeCompleteMessage,
-  getChallengeFeedback,
-  getPhaseIntroMessages,
-} from '@/lib/coachEngine';
-import { getPhase, getNextPhase, PHASES } from '@/lib/phases';
+  getMarketConditionMessage,
+} from '@/lib/ariaEngine';
 import { sound } from '@/lib/soundEngine';
-import { saveState, loadState, clearState, SavedState } from '@/lib/persistence';
+import { saveState, loadState, clearState, buildDefaultLessonProgress, buildStatsFromSave } from '@/lib/persistence';
+import { ACADEMY_MODULES } from '@/lib/academy';
 
 const STARTING_BALANCE = 10000;
 
@@ -32,28 +30,39 @@ const DEFAULT_ACHIEVEMENTS: Achievement[] = [
   { id: 'first-trade', title: 'First Steps', description: 'Place your first trade', icon: '🎯', unlocked: false },
   { id: 'first-profit', title: 'In the Green', description: 'Close a profitable trade', icon: '💰', unlocked: false },
   { id: 'five-trades', title: 'Getting Started', description: 'Complete 5 trades', icon: '📊', unlocked: false },
-  { id: 'win-streak', title: 'Hot Streak', description: '3 profitable trades in a row', icon: '🔥', unlocked: false },
-  { id: 'risk-manager', title: 'Risk Manager', description: 'Use a stop loss on 5 trades', icon: '🛡️', unlocked: false },
+  { id: 'ten-trades', title: 'Consistent', description: 'Complete 10 trades', icon: '🔢', unlocked: false },
+  { id: 'win-streak-3', title: 'Hot Streak', description: '3 profitable trades in a row', icon: '🔥', unlocked: false },
+  { id: 'win-streak-5', title: 'On Fire', description: '5 profitable trades in a row', icon: '🔥🔥', unlocked: false },
+  { id: 'risk-manager', title: 'Risk Manager', description: 'Use stop loss on 5 trades', icon: '🛡️', unlocked: false },
+  { id: 'risk-master', title: 'Risk Master', description: 'Use stop loss on 20 trades', icon: '⚔️', unlocked: false },
+  { id: 'module-1', title: 'The Market', description: 'Complete Module 1', icon: '📈', unlocked: false },
+  { id: 'module-4', title: 'Tier 1 Graduate', description: 'Complete Module 4', icon: '🥉', unlocked: false },
+  { id: 'module-9', title: 'Tier 2 Graduate', description: 'Complete Module 9', icon: '🥈', unlocked: false },
+  { id: 'module-13', title: 'Professional Trader', description: 'Complete the Academy', icon: '🏆', unlocked: false },
+  { id: 'rr-2to1', title: 'R:R Disciplined', description: 'Complete a trade at 2:1 R:R', icon: '⚖️', unlocked: false },
+  { id: 'balance-11k', title: 'Growing Account', description: 'Reach $11,000 balance', icon: '💵', unlocked: false },
+  { id: 'balance-12k', title: 'Strong Account', description: 'Reach $12,000 balance', icon: '💵💵', unlocked: false },
   { id: 'level-5', title: 'Apprentice', description: 'Reach Level 5', icon: '⭐', unlocked: false },
-  { id: 'phase-3', title: 'Trend Spotter', description: 'Complete Phase 3', icon: '📈', unlocked: false },
-  { id: 'phase-6', title: 'Risk Guardian', description: 'Complete Phase 6', icon: '🛡️', unlocked: false },
+  { id: 'level-10', title: 'Professional', description: 'Reach Level 10', icon: '🌟', unlocked: false },
+  { id: 'patient', title: 'Patient Trader', description: 'Hold a trade for 10+ candles', icon: '⏳', unlocked: false },
+  { id: 'no-revenge', title: 'Iron Discipline', description: 'No cooldown triggered in a session', icon: '🧘', unlocked: false },
+  { id: 'graduation', title: 'Academy Graduate', description: 'Complete all 13 modules', icon: '🎓', unlocked: false },
 ];
 
 function buildDefaultStats(): PlayerStats {
   return {
     level: 1,
     xp: 0,
-    xpToNext: 100,
+    xpToNext: 150,
     xpTotal: 0,
     totalTrades: 0,
     winRate: 0,
     balance: STARTING_BALANCE,
     startingBalance: STARTING_BALANCE,
     achievements: [...DEFAULT_ACHIEVEMENTS],
-    phase: 1,
-    conceptsSeen: [],
-    challengeProgress: 0,
     stopLossCount: 0,
+    winStreak: 0,
+    maxWinStreak: 0,
   };
 }
 
@@ -62,24 +71,6 @@ function mergeAchievements(saved: Achievement[]): Achievement[] {
     const found = saved.find(a => a.id === def.id);
     return found ? { ...def, unlocked: found.unlocked, unlockedAt: found.unlockedAt } : def;
   });
-}
-
-function buildStatsFromSave(saved: SavedState): PlayerStats {
-  return {
-    level: saved.level ?? 1,
-    xp: saved.xp ?? 0,
-    xpToNext: saved.xpToNext ?? 100,
-    xpTotal: saved.xpTotal ?? 0,
-    totalTrades: saved.totalTrades ?? 0,
-    winRate: saved.winRate ?? 0,
-    balance: saved.balance ?? STARTING_BALANCE,
-    startingBalance: STARTING_BALANCE,
-    achievements: mergeAchievements(saved.achievements ?? []),
-    phase: saved.phase ?? 1,
-    conceptsSeen: saved.conceptsSeen ?? [],
-    challengeProgress: saved.challengeProgress ?? 0,
-    stopLossCount: saved.stopLossCount ?? 0,
-  };
 }
 
 export interface TradingEngineState {
@@ -94,9 +85,8 @@ export interface TradingEngineState {
   supportResistance: { support: number; resistance: number };
   newAchievement: Achievement | null;
   isPaused: boolean;
-  ariaState: AriaState;
+  ariaMode: AriaMode;
   cooldownSeconds: number;
-  phaseUnlocking: boolean;
   xpGain: number | null;
   tradeResult: 'win' | 'loss' | null;
   ema9: number[];
@@ -106,37 +96,44 @@ export interface TradingEngineState {
   takeProfit: number | null;
   newsEvent: NewsEvent;
   muted: boolean;
+  lessonProgress: LessonProgress;
+  devMode: boolean;
+  candleTickCount: number;
 }
 
 export interface TradingEngineActions {
   setIsPaused: (v: boolean) => void;
-  openTrade: (type: 'buy' | 'sell', sl?: number, tp?: number) => void;
-  closeTrade: () => void;
+  openTrade: (type: 'buy' | 'sell', sl?: number, tp?: number, missionId?: string) => void;
+  closeTrade: (atPrice?: number) => void;
   setLotSize: (size: number) => void;
   setStopLoss: (price: number | null) => void;
   setTakeProfit: (price: number | null) => void;
   devUnlockAll: () => void;
   resetProgress: () => void;
   toggleMute: () => void;
+  addCoachMessage: (msg: CoachMessage) => void;
+  addXp: (amount: number) => void;
+  unlockAchievement: (id: string) => void;
+  setLessonProgress: (lp: LessonProgress | ((prev: LessonProgress) => LessonProgress)) => void;
+  setAriaMode: (mode: AriaMode) => void;
+  setMuted: (muted: boolean) => void;
 }
 
 export function useTradingEngine(): TradingEngineState & TradingEngineActions {
-  // Lazy-init from localStorage
-  const savedRef = useRef<SavedState | null>(loadState());
+  const savedRef = useRef(loadState());
   const saved = savedRef.current;
 
   const [candles, setCandles] = useState<Candle[]>(() => generateInitialCandles(60));
   const [trades, setTrades] = useState<Trade[]>(() => saved?.trades ?? []);
   const [activeTrade, setActiveTrade] = useState<Trade | null>(null);
-  const [coachMessages, setCoachMessages] = useState<CoachMessage[]>(getWelcomeMessages);
+  const [coachMessages, setCoachMessages] = useState<CoachMessage[]>(() => getWelcomeMessages());
   const [stats, setStats] = useState<PlayerStats>(() =>
-    saved ? buildStatsFromSave(saved) : buildDefaultStats()
+    saved ? { ...buildStatsFromSave(saved), achievements: mergeAchievements(saved.achievements) } : buildDefaultStats()
   );
   const [newAchievement, setNewAchievement] = useState<Achievement | null>(null);
   const [isPaused, setIsPaused] = useState(false);
-  const [ariaState, setAriaState] = useState<AriaState>('teal');
+  const [ariaMode, setAriaMode] = useState<AriaMode>('teaching');
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
-  const [phaseUnlocking, setPhaseUnlocking] = useState(false);
   const [xpGain, setXpGain] = useState<number | null>(null);
   const [tradeResult, setTradeResult] = useState<'win' | 'loss' | null>(null);
   const [lotSize, setLotSize] = useState(0.1);
@@ -148,21 +145,36 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
     sound.setMuted(m);
     return m;
   });
+  const [lessonProgress, setLessonProgress] = useState<LessonProgress>(() =>
+    saved?.lessonProgress ?? buildDefaultLessonProgress()
+  );
+  const [devMode, setDevMode] = useState(false);
+  const [candleTickCount, setCandleTickCount] = useState(0);
 
   const tickRef = useRef(0);
   const coachTickRef = useRef(0);
   const cooldownRef = useRef(0);
   const achievementQueueRef = useRef<Achievement[]>([]);
   const showingAchievementRef = useRef(false);
+  const activeTradeRef = useRef<Trade | null>(null);
+  const candleSpeedMsRef = useRef(2000);
+  const tradeCooldownTriggered = useRef(false);
 
   const currentPrice = useMemo(
     () => (candles.length > 0 ? candles[candles.length - 1].close : STARTING_BALANCE),
     [candles]
   );
 
+  useEffect(() => {
+    activeTradeRef.current = activeTrade;
+  }, [activeTrade]);
+
+  useEffect(() => {
+    candleSpeedMsRef.current = lessonProgress.candleSpeedMs ?? 2000;
+  }, [lessonProgress.candleSpeedMs]);
+
   const ema9 = useMemo(() => calculateEMA(candles, 9), [candles]);
   const ema21 = useMemo(() => calculateEMA(candles, 21), [candles]);
-
   const srZones = useMemo(() => findSRZones(candles), [candles]);
   const supportResistance = useMemo(() => findSupportResistance(candles), [candles]);
 
@@ -174,10 +186,9 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
     return Math.round(raw * 100) / 100;
   }, [activeTrade, currentPrice]);
 
-  // Persistence: save whenever stats, trades, or muted change
+  // Persistence
   useEffect(() => {
     saveState({
-      phase: stats.phase,
       xp: stats.xp,
       xpTotal: stats.xpTotal,
       xpToNext: stats.xpToNext,
@@ -185,19 +196,20 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
       balance: stats.balance,
       trades,
       achievements: stats.achievements,
-      challengeProgress: stats.challengeProgress,
       stopLossCount: stats.stopLossCount,
-      conceptsSeen: stats.conceptsSeen,
+      winStreak: stats.winStreak,
+      maxWinStreak: stats.maxWinStreak,
       totalTrades: stats.totalTrades,
       winRate: stats.winRate,
       muted,
+      lessonProgress,
       savedAt: Date.now(),
     });
-  }, [stats, trades, muted]);
+  }, [stats, trades, muted, lessonProgress]);
 
   const addCoachMessage = useCallback((message: CoachMessage | null) => {
     if (!message) return;
-    setCoachMessages(prev => [...prev.slice(-30), message]);
+    setCoachMessages(prev => [...prev.slice(-40), message]);
   }, []);
 
   const showXpGain = useCallback((amount: number) => {
@@ -215,10 +227,11 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
       setNewAchievement(null);
       showingAchievementRef.current = false;
       setTimeout(showAchievementFromQueue, 300);
-    }, 4000);
+    }, 4200);
   }, []);
 
-  const addXp = useCallback((amount: number, reason?: string) => {
+  const addXp = useCallback((amount: number) => {
+    if (amount <= 0) return;
     showXpGain(amount);
     setStats(prev => {
       let newXp = prev.xp + amount;
@@ -229,17 +242,17 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
       while (newXp >= newXpToNext) {
         newXp -= newXpToNext;
         newLevel++;
-        newXpToNext = Math.round(newXpToNext * 1.3);
+        newXpToNext = Math.round(newXpToNext * 1.4);
       }
 
       if (newLevel > prev.level) {
         sound.levelUp();
-        setTimeout(() => addCoachMessage(getLevelUpMessage(newLevel)), 500);
+        setTimeout(() => addCoachMessage(getLevelUpMessage(newLevel, lessonProgress.currentModuleId)), 500);
       }
 
       return { ...prev, xp: newXp, xpTotal: newXpTotal, level: newLevel, xpToNext: newXpToNext };
     });
-  }, [addCoachMessage, showXpGain]);
+  }, [addCoachMessage, showXpGain, lessonProgress.currentModuleId]);
 
   const unlockAchievement = useCallback((id: string) => {
     setStats(prev => {
@@ -253,19 +266,20 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
       setTimeout(showAchievementFromQueue, 100);
       return { ...prev, achievements: updated };
     });
-    addXp(25);
+    setTimeout(() => addXp(25), 200);
   }, [addXp, showAchievementFromQueue]);
 
   const triggerCooldown = useCallback((seconds: number) => {
+    tradeCooldownTriggered.current = true;
     cooldownRef.current = seconds;
     setCooldownSeconds(seconds);
     addCoachMessage(getRevengeTradingMessage());
     sound.ariaWarn();
-    setAriaState('red');
+    setAriaMode('danger');
   }, [addCoachMessage]);
 
-  const openTrade = useCallback((type: 'buy' | 'sell', sl?: number, tp?: number) => {
-    if (activeTrade || cooldownRef.current > 0) return;
+  const openTrade = useCallback((type: 'buy' | 'sell', sl?: number, tp?: number, missionId?: string) => {
+    if (activeTradeRef.current || cooldownRef.current > 0) return;
 
     const finalSL = sl ?? stopLoss ?? undefined;
     const finalTP = tp ?? takeProfit ?? undefined;
@@ -289,112 +303,103 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
       status: 'open',
       hadStopLoss: finalSL !== undefined,
       rrRatio,
+      missionId,
+      candlesHeld: 0,
     };
 
     setActiveTrade(trade);
-    addCoachMessage(getTradeOpenMessage(trade, stats));
+    activeTradeRef.current = trade;
+    addCoachMessage(getTradeOpenMessage(trade, lessonProgress.currentModuleId));
     sound.tradeOpen();
     addXp(5);
 
-    if (stats.totalTrades === 0) {
-      setTimeout(() => unlockAchievement('first-trade'), 500);
-    }
-  }, [activeTrade, currentPrice, lotSize, stopLoss, takeProfit, stats, addCoachMessage, addXp, unlockAchievement]);
+    setStats(prev => {
+      if (prev.totalTrades === 0) {
+        setTimeout(() => unlockAchievement('first-trade'), 500);
+      }
+      return prev;
+    });
+  }, [currentPrice, lotSize, stopLoss, takeProfit, lessonProgress.currentModuleId, addCoachMessage, addXp, unlockAchievement]);
 
-  const closeTrade = useCallback(() => {
-    if (!activeTrade) return;
+  const closeTrade = useCallback((atPrice?: number) => {
+    const trade = activeTradeRef.current;
+    if (!trade) return;
 
-    const pnl = activeTrade.type === 'buy'
-      ? (currentPrice - activeTrade.entryPrice) * activeTrade.lotSize * 100
-      : (activeTrade.entryPrice - currentPrice) * activeTrade.lotSize * 100;
+    const exitPrice = atPrice ?? currentPrice;
+    const pnl = trade.type === 'buy'
+      ? (exitPrice - trade.entryPrice) * trade.lotSize * 100
+      : (trade.entryPrice - exitPrice) * trade.lotSize * 100;
 
     const closedTrade: Trade = {
-      ...activeTrade,
-      exitPrice: currentPrice,
+      ...trade,
+      exitPrice,
       exitTime: Date.now(),
       pnl: Math.round(pnl * 100) / 100,
       status: 'closed',
     };
 
+    setActiveTrade(null);
+    activeTradeRef.current = null;
+
     setTrades(prev => {
       const allClosed = [...prev, closedTrade];
+      const wins = allClosed.filter(t => (t.pnl ?? 0) > 0).length;
+      const total = allClosed.length;
 
       setStats(prevStats => {
-        const phase = getPhase(prevStats.phase);
-        const criteria = phase.challenge.criteria;
-
-        let meetsThisOne = true;
-        if (criteria.tradeType && closedTrade.type !== criteria.tradeType) meetsThisOne = false;
-        if (criteria.requireStopLoss && !closedTrade.hadStopLoss) meetsThisOne = false;
-        if (criteria.requireTakeProfit && !closedTrade.takeProfit) meetsThisOne = false;
-        if (criteria.mustBeProfit && (closedTrade.pnl ?? 0) <= 0) meetsThisOne = false;
-        if (criteria.minRR && (closedTrade.rrRatio ?? 0) < criteria.minRR) meetsThisOne = false;
-        if (criteria.maxRiskPercent) {
-          const riskPct = closedTrade.hadStopLoss && closedTrade.stopLoss
-            ? (Math.abs(closedTrade.entryPrice - closedTrade.stopLoss) * closedTrade.lotSize * 100) / prevStats.balance * 100
-            : 100;
-          if (riskPct > criteria.maxRiskPercent) meetsThisOne = false;
-        }
-
-        const newProgress = meetsThisOne ? prevStats.challengeProgress + 1 : prevStats.challengeProgress;
-        const required = criteria.count ?? 1;
-        const challengeComplete = newProgress >= required;
-
-        const wins = allClosed.filter(t => (t.pnl ?? 0) > 0).length;
-        const total = allClosed.length;
+        const isWin = pnl > 0;
+        const newWinStreak = isWin ? prevStats.winStreak + 1 : 0;
+        const newMaxWinStreak = Math.max(prevStats.maxWinStreak, newWinStreak);
         const newStopLossCount = closedTrade.hadStopLoss ? prevStats.stopLossCount + 1 : prevStats.stopLossCount;
 
-        const nextPhase = getNextPhase(prevStats.phase);
+        // Achievement checks
+        if (total === 1) setTimeout(() => unlockAchievement('first-trade'), 300);
+        if (isWin) setTimeout(() => unlockAchievement('first-profit'), 300);
+        if (total >= 5) setTimeout(() => unlockAchievement('five-trades'), 300);
+        if (total >= 10) setTimeout(() => unlockAchievement('ten-trades'), 300);
+        if (newWinStreak >= 3) setTimeout(() => unlockAchievement('win-streak-3'), 300);
+        if (newWinStreak >= 5) setTimeout(() => unlockAchievement('win-streak-5'), 300);
+        if (newStopLossCount >= 5) setTimeout(() => unlockAchievement('risk-manager'), 300);
+        if (newStopLossCount >= 20) setTimeout(() => unlockAchievement('risk-master'), 300);
+        if (closedTrade.rrRatio && closedTrade.rrRatio >= 2) setTimeout(() => unlockAchievement('rr-2to1'), 300);
+        if ((closedTrade.candlesHeld ?? 0) >= 10) setTimeout(() => unlockAchievement('patient'), 300);
 
-        if (challengeComplete && nextPhase) {
-          setTimeout(() => {
-            addCoachMessage(getChallengeCompleteMessage(phase.challenge.successMessage, phase.challenge.xpReward));
-            addXp(phase.challenge.xpReward);
-            sound.phaseUnlock();
-            setPhaseUnlocking(true);
-            setTimeout(() => {
-              setPhaseUnlocking(false);
-              setStats(s => {
-                const newPhase = s.phase + 1;
-                const nextPhaseData = getPhase(newPhase);
-                setTimeout(() => {
-                  const introMsgs = getPhaseIntroMessages(nextPhaseData.ariaIntroMessage);
-                  introMsgs.forEach((m, i) => {
-                    setTimeout(() => addCoachMessage(m), i * 800);
-                  });
-                }, 500);
-                return { ...s, phase: newPhase, challengeProgress: 0 };
-              });
-            }, 5500);
-          }, 300);
-
-          if (prevStats.phase === 3) setTimeout(() => unlockAchievement('phase-3'), 1000);
-          if (prevStats.phase === 6) setTimeout(() => unlockAchievement('phase-6'), 1000);
-        } else if (!challengeComplete && !meetsThisOne && prevStats.challengeProgress === newProgress) {
-          if (total % 2 === 0) {
-            setTimeout(() => addCoachMessage(getChallengeFeedback(phase.challenge.failureMessage)), 500);
-          }
-        }
+        const newBalance = prevStats.balance + (closedTrade.pnl ?? 0);
+        if (newBalance >= 11000) setTimeout(() => unlockAchievement('balance-11k'), 300);
+        if (newBalance >= 12000) setTimeout(() => unlockAchievement('balance-12k'), 300);
 
         return {
           ...prevStats,
-          balance: prevStats.balance + (closedTrade.pnl ?? 0),
+          balance: newBalance,
           totalTrades: total,
           winRate: total > 0 ? Math.round((wins / total) * 100) : 0,
-          challengeProgress: challengeComplete ? 0 : newProgress,
           stopLossCount: newStopLossCount,
+          winStreak: newWinStreak,
+          maxWinStreak: newMaxWinStreak,
         };
       });
+
+      // Revenge trading detection
+      const recent5 = allClosed.slice(-5);
+      if (recent5.length >= 3) {
+        const losses = recent5.filter(t => (t.pnl ?? 0) < 0);
+        if (losses.length >= 3) {
+          const times = losses.map(t => t.exitTime ?? 0).sort((a, b) => a - b);
+          const allFast = times.every((t, i) => i === 0 || t - times[i - 1] < 4 * 60 * 1000);
+          if (allFast && cooldownRef.current <= 0) {
+            setTimeout(() => triggerCooldown(45), 300);
+          }
+        }
+      }
 
       return allClosed;
     });
 
-    setActiveTrade(null);
-    addCoachMessage(getTradeCloseMessage(closedTrade, currentPrice, candles));
+    addCoachMessage(getTradeCloseMessage(closedTrade, lessonProgress.currentModuleId));
 
     const isWin = pnl > 0;
     setTradeResult(isWin ? 'win' : 'loss');
-    setTimeout(() => setTradeResult(null), 1000);
+    setTimeout(() => setTradeResult(null), 1200);
 
     if (isWin) {
       sound.tradeWin();
@@ -404,86 +409,57 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
       addXp(3);
     }
 
-    if (isWin) setTimeout(() => unlockAchievement('first-profit'), 300);
-
-    setTrades(prev => {
-      const closed = prev.filter(t => t.status === 'closed');
-      if (closed.length + 1 >= 5) setTimeout(() => unlockAchievement('five-trades'), 300);
-
-      const recentThree = closed.slice(-2);
-      if (recentThree.length >= 2 && recentThree.every(t => (t.pnl ?? 0) > 0) && isWin) {
-        setTimeout(() => unlockAchievement('win-streak'), 300);
-      }
-      if ((stats.stopLossCount + (closedTrade.hadStopLoss ? 1 : 0)) >= 5) {
-        setTimeout(() => unlockAchievement('risk-manager'), 300);
-      }
-      return prev;
-    });
-
-    // Revenge trading detection
-    setTrades(prev => {
-      const closed = [...prev.filter(t => t.status === 'closed'), closedTrade];
-      const recent5 = closed.slice(-5);
-      if (recent5.length >= 3) {
-        const losses = recent5.filter(t => (t.pnl ?? 0) < 0);
-        if (losses.length >= 3) {
-          const times = losses.map(t => t.exitTime ?? 0).sort((a, b) => a - b);
-          const allFast = times.every((t, i) => i === 0 || t - times[i - 1] < 4 * 60 * 1000);
-          if (allFast) {
-            triggerCooldown(45);
-          }
-        }
-      }
-      return prev;
-    });
-
     setStopLoss(null);
     setTakeProfit(null);
-  }, [activeTrade, currentPrice, candles, stats, addCoachMessage, addXp, unlockAchievement, triggerCooldown]);
+  }, [currentPrice, lessonProgress.currentModuleId, addCoachMessage, addXp, unlockAchievement, triggerCooldown]);
 
-  // Price tick — new candle every 2s
+  // Price tick
   useEffect(() => {
     if (isPaused) return;
+    const speedMs = lessonProgress.candleSpeedMs ?? 2000;
     const interval = setInterval(() => {
       tickRef.current++;
+      setCandleTickCount(t => t + 1);
+
       setCandles(prev => {
         const lastCandle = prev[prev.length - 1];
         const newCandle = generateNextCandle(lastCandle.close, Date.now());
         sound.candleClose();
-
-        // Update news event state
         setNewsEvent(getNewsEvent());
 
-        // Fire sound on news spike start
-        const currentNews = getNewsEvent();
-        if (currentNews.state === 'spike' && currentNews.candlesRemaining > 0) {
-          sound.newsSpike();
-        }
-
-        // Auto-close on SL/TP
-        if (activeTrade) {
+        // Auto-close on SL/TP hit
+        const trade = activeTradeRef.current;
+        if (trade) {
           const price = newCandle.close;
-          const { stopLoss: sl, takeProfit: tp, type } = activeTrade;
+          const { stopLoss: sl, takeProfit: tp, type } = trade;
 
           if (sl !== undefined) {
             const slHit = type === 'buy' ? price <= sl : price >= sl;
             if (slHit) {
-              setTimeout(() => closeTrade(), 50);
+              setTimeout(() => closeTrade(sl), 30);
+              return [...prev.slice(-120), newCandle];
             }
           }
           if (tp !== undefined) {
             const tpHit = type === 'buy' ? price >= tp : price <= tp;
             if (tpHit) {
-              setTimeout(() => closeTrade(), 50);
+              setTimeout(() => closeTrade(tp), 30);
+              return [...prev.slice(-120), newCandle];
             }
           }
+
+          // Increment candles held
+          setActiveTrade(t => t ? { ...t, candlesHeld: (t.candlesHeld ?? 0) + 1 } : null);
+          activeTradeRef.current = activeTradeRef.current
+            ? { ...activeTradeRef.current, candlesHeld: (activeTradeRef.current.candlesHeld ?? 0) + 1 }
+            : null;
         }
 
         return [...prev.slice(-120), newCandle];
       });
-    }, 2000);
+    }, speedMs);
     return () => clearInterval(interval);
-  }, [isPaused, activeTrade, closeTrade]);
+  }, [isPaused, closeTrade, lessonProgress.candleSpeedMs]);
 
   // Cooldown countdown
   useEffect(() => {
@@ -493,8 +469,9 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
         const next = prev - 1;
         if (next <= 0) {
           cooldownRef.current = 0;
-          setAriaState('teal');
+          setAriaMode('watching');
           sound.cooldownEnd();
+          setTimeout(() => addCoachMessage(getCooldownEndMessage()), 200);
         } else {
           cooldownRef.current = next;
         }
@@ -502,60 +479,74 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [cooldownSeconds]);
+  }, [cooldownSeconds, addCoachMessage]);
 
-  // Coach commentary loop
+  // Commentary loop
   useEffect(() => {
     if (isPaused) return;
     const interval = setInterval(() => {
       coachTickRef.current++;
+      const trade = activeTradeRef.current;
 
-      // Update aria state
-      const newAriaState = detectAriaState(activeTrade, trades, currentPrice);
-      setAriaState(prev => prev === 'red' && cooldownRef.current > 0 ? 'red' : newAriaState);
+      // Aria mode update
+      const isLesson = lessonProgress.currentLessonIndex < ACADEMY_MODULES.find(m => m.id === lessonProgress.currentModuleId)?.lessons.length!;
+      const isMission = lessonProgress.missionActive ?? false;
+      const newMode = getAriaMode(
+        trade, trades, currentPrice,
+        cooldownRef.current > 0, isLesson, isMission, false
+      );
+      if (cooldownRef.current <= 0) setAriaMode(newMode);
 
-      // Open trade commentary every 10-15 seconds
-      if (activeTrade && coachTickRef.current % 6 === 0) {
-        const commentary = getOpenTradeCommentary(activeTrade, currentPrice, candles, ariaState);
+      // Open trade commentary
+      if (trade && coachTickRef.current % 7 === 0) {
+        const commentary = getOpenTradeCommentary(trade, currentPrice, lessonProgress.currentModuleId);
         if (commentary) addCoachMessage(commentary);
       }
 
-      // Market condition coaching every ~20 seconds
-      if (coachTickRef.current % 10 === 0) {
+      // Market condition coaching
+      if (coachTickRef.current % 12 === 0 && !isMission && !isLesson) {
         const condition = detectMarketCondition(candles);
-        const condMsg = getMarketConditionMessage(condition, stats.conceptsSeen, candles, currentPrice);
-        if (condMsg) {
-          addCoachMessage(condMsg);
-          if (!stats.conceptsSeen.includes(condition)) {
-            setStats(prev => ({
-              ...prev,
-              conceptsSeen: [...prev.conceptsSeen, condition],
-            }));
-          }
-        }
+        const condMsg = getMarketConditionMessage(condition, lessonProgress.currentModuleId);
+        if (condMsg) addCoachMessage(condMsg);
       }
 
-      // Level 5 achievement check
-      if (stats.level >= 5) {
-        unlockAchievement('level-5');
-      }
+      // Level achievement checks
+      setStats(prev => {
+        if (prev.level >= 5 && !prev.achievements.find(a => a.id === 'level-5')?.unlocked) {
+          setTimeout(() => unlockAchievement('level-5'), 100);
+        }
+        if (prev.level >= 10 && !prev.achievements.find(a => a.id === 'level-10')?.unlocked) {
+          setTimeout(() => unlockAchievement('level-10'), 100);
+        }
+        return prev;
+      });
     }, 2000);
     return () => clearInterval(interval);
-  }, [isPaused, activeTrade, trades, currentPrice, candles, stats, ariaState, addCoachMessage, unlockAchievement]);
+  }, [isPaused, trades, currentPrice, candles, lessonProgress, addCoachMessage, unlockAchievement]);
 
   // Dev mode: Ctrl+Shift+D
   const devUnlockAll = useCallback(() => {
+    setDevMode(true);
+    const allModuleIds = ACADEMY_MODULES.map(m => m.id);
+    const allLessonIds = ACADEMY_MODULES.flatMap(m => m.lessons.map(l => l.id));
+    const allMissionIds = ACADEMY_MODULES.map(m => m.mission.id);
+    setLessonProgress(prev => ({
+      ...prev,
+      completedLessonIds: allLessonIds,
+      completedMissionIds: allMissionIds,
+      currentModuleId: 13,
+      currentLessonIndex: 4,
+    }));
     setStats(prev => ({
       ...prev,
-      phase: PHASES.length,
-      xp: 999,
+      xp: 499,
       xpTotal: 99999,
       level: 10,
-      challengeProgress: 0,
+      xpToNext: 500,
     }));
     addCoachMessage({
       id: `dev-${Date.now()}`,
-      text: '[DEV] All phases unlocked, XP maxed.',
+      text: '[DEV] All modules, lessons and missions unlocked.',
       type: 'learn',
       timestamp: Date.now(),
     });
@@ -564,6 +555,7 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+        setDevMode(true);
         devUnlockAll();
       }
     };
@@ -573,24 +565,23 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
 
   const resetProgress = useCallback(() => {
     clearState();
+    const freshCandles = generateInitialCandles(60);
+    setCandles(freshCandles);
     setStats(buildDefaultStats());
     setTrades([]);
     setActiveTrade(null);
+    activeTradeRef.current = null;
     setCooldownSeconds(0);
     cooldownRef.current = 0;
-    setAriaState('teal');
-    setPhaseUnlocking(false);
+    setAriaMode('teaching');
     setXpGain(null);
     setTradeResult(null);
     setStopLoss(null);
     setTakeProfit(null);
-    addCoachMessage({
-      id: `reset-${Date.now()}`,
-      text: 'Journey reset. Every master started at zero. Let\'s begin again.',
-      type: 'learn',
-      timestamp: Date.now(),
-    });
-  }, [addCoachMessage]);
+    setLessonProgress(buildDefaultLessonProgress());
+    tradeCooldownTriggered.current = false;
+    setCoachMessages(getWelcomeMessages());
+  }, []);
 
   const toggleMute = useCallback(() => {
     setMuted(prev => {
@@ -598,6 +589,11 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
       sound.setMuted(next);
       return next;
     });
+  }, []);
+
+  const setMutedWithSound = useCallback((m: boolean) => {
+    sound.setMuted(m);
+    setMuted(m);
   }, []);
 
   return {
@@ -612,9 +608,8 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
     supportResistance,
     newAchievement,
     isPaused,
-    ariaState,
+    ariaMode,
     cooldownSeconds,
-    phaseUnlocking,
     xpGain,
     tradeResult,
     ema9,
@@ -624,6 +619,9 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
     takeProfit,
     newsEvent,
     muted,
+    lessonProgress,
+    devMode,
+    candleTickCount,
     setIsPaused,
     openTrade,
     closeTrade,
@@ -633,5 +631,11 @@ export function useTradingEngine(): TradingEngineState & TradingEngineActions {
     devUnlockAll,
     resetProgress,
     toggleMute,
+    addCoachMessage,
+    addXp,
+    unlockAchievement,
+    setLessonProgress,
+    setAriaMode,
+    setMuted: setMutedWithSound,
   };
 }

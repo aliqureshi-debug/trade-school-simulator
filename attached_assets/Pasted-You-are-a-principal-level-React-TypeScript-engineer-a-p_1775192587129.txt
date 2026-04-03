@@ -1,0 +1,223 @@
+You are a principal-level React/TypeScript engineer, a professional trader with institutional market experience, and a world-class product designer and educator. You have been handed the complete codebase of TradeSchool — a browser-based trading simulator and education platform built in React 19, TypeScript, Vite, Tailwind CSS, Shadcn/UI, Framer Motion, and a fully custom canvas chart renderer. Read every single file in the codebase completely before touching anything.
+Your job is a complete structural and experiential revamp. Not a patch. Not a polish. A rethinking of how this app teaches trading — made real in code.
+
+THE PROBLEM WITH THE CURRENT STRUCTURE
+The current app has 12 linear "phases" that feel like arbitrary gates. Users have no idea what they are learning or why. There are no lessons — just challenges that assume knowledge the user was never given. Concepts like lots, pips, stop loss, R:R ratio, and position sizing are used in challenges without ever being explained. The phase system is broken — users skip phases after 2 trades. XP inflates too fast. Challenge criteria are either stubs or not validated at all. ARIA repeats the same generic messages. Nothing teaches anything.
+Throw away the phase structure entirely. Replace it with the Academy structure described below.
+
+THE NEW STRUCTURE: TRADING ACADEMY
+Three tiers. Each tier has modules. Each module has lessons followed by one mission. Lessons teach. Missions prove. You cannot access a mission without completing its lessons. You cannot access the next module without completing the current mission. This is the law — no exceptions except Dev Mode.
+Every lesson is a 20 to 40 second interactive experience that plays directly on the chart. ARIA narrates with typewriter animation while animated overlays draw on the canvas in real time showing exactly what the lesson is about. The user watches, reads, and interacts. Then they take the mission — a real trade on the live chart that proves they understood the lesson.
+
+TIER 1 — RECRUIT
+ARIA introduction line: "You know nothing about markets yet. That is fine. I will build your foundation from zero."
+Module 1: The Market
+
+Lesson 1 — What is price: ARIA narrates while the chart zooms in on 5 candles. An animated arrow traces price moving up and down. Caption: "Price is simply the last amount someone agreed to pay. Every tick is a transaction."
+Lesson 2 — What is a candle: ARIA draws animated labels on one candle — open, close, high, low. The body fills in, then wicks extend. Caption: "Each candle is one time period. The body is where price started and ended. The wicks show how far it reached."
+Lesson 3 — Bull vs Bear candle: Two candles animate side by side — one green filling upward, one red filling downward. Caption: "Green means buyers won that period. Red means sellers won. Simple as that."
+Lesson 4 — What is a pip: ARIA draws a bracket on the chart between two price levels with an animated measurement line. The number 1.00 appears next to it. Caption: "A pip is the smallest standard price movement. On Gold, moving from 1950.00 to 1951.00 is 100 pips."
+Mission 1: Open any BUY trade and close it. ARIA guides every single click with animated arrows pointing at the exact UI element to use. The BUY button pulses. The Close button pulses when trade is open. Pass on any outcome.
+
+Module 2: Reading Candles
+
+Lesson 1 — The Doji: ARIA highlights a doji candle on the live chart with a glowing rectangle. Animated labels show equal wicks. Caption: "A Doji has almost no body. Buyers and sellers ended exactly where they started. This means indecision — neither side won."
+Lesson 2 — The Hammer: ARIA highlights a hammer candle. Animated arrow points to the long lower wick. Caption: "A Hammer has a long lower wick. Sellers pushed price down hard, but buyers fought back and closed near the top. This is rejection of lower prices."
+Lesson 3 — The Engulfing: ARIA highlights two consecutive candles where the second completely engulfs the first. An animated bracket shows the second candle is larger. Caption: "An Engulfing candle completely swallows the previous candle. This is a momentum shift — the new side overwhelmed the old."
+Lesson 4 — What wicks mean: ARIA draws on three candles showing different wick lengths with animated length comparisons. Caption: "Long wicks mean the market tried to go somewhere and got rejected. Always ask: where is the wick pointing, and where is it coming from?"
+Mission 2: ARIA marks a specific candle pattern on the live chart with a glowing highlight. User must identify whether it is bullish or bearish by clicking a BUY or SELL button before placing the trade. Then hold the trade for at least 3 candles.
+
+Module 3: Trend
+
+Lesson 1 — What is a trend: ARIA draws animated arrows connecting swing highs and swing lows on the chart. Green arrows for higher highs, higher lows. Caption: "An uptrend is a series of higher highs and higher lows. Price is making progress upward. Downtrend is the opposite."
+Lesson 2 — Market structure: ARIA marks HH, HL, LH, LL labels on the last 20 candles of the live chart with animated text appearing one by one. Caption: "Structure is the skeleton of the market. Before every trade, identify the structure. It tells you who is in control."
+Lesson 3 — Trend reversal: ARIA animates a scenario where a higher low is broken — draws a circle around the break, arrow showing the shift. Caption: "A trend reversal begins when structure breaks. A higher low that fails to form, or a swing low that is broken — these are your warning signs."
+Lesson 4 — Why fighting the trend is fatal: ARIA shows an animated price sequence — a strong uptrend, user sells into it, price continues up, account damaged. Caption: "The trend is the most powerful force in the market. Every trade against it requires the trend to be wrong. Most of the time, the trend is not wrong."
+Mission 3: Wait for the market regime badge to show UPTREND. Open a BUY trade. Hold it for a minimum of 5 candles. Close it in profit. ARIA tells the user exactly what to watch for and when to enter.
+
+Module 4: Support and Resistance
+
+Lesson 1 — What is a level: ARIA animates price touching the same horizontal area 3 times — each touch highlighted with a pulse. A horizontal line draws itself. Caption: "A support or resistance level is a price area where the market has reacted before. The more touches, the stronger the level."
+Lesson 2 — Support vs Resistance: ARIA animates a price sequence — price bounces off support, then breaks through, then retests from above as new support. Caption: "Resistance is a ceiling. Support is a floor. When price breaks through one, it often flips — the old ceiling becomes the new floor."
+Lesson 3 — Zones not lines: ARIA erases a thin line on the chart and replaces it with a shaded band. Caption: "Levels are not laser lines. They are zones. Price rarely respects an exact number — it respects an area. Trade the zone, not the line."
+Lesson 4 — Trading from a level: ARIA annotates an entry setup on the chart — price approaching support, a rejection candle forming, entry arrow appearing. Caption: "The highest probability entries happen when price returns to a level it has respected before. Wait for the rejection. Then enter."
+Mission 4: Open a trade within 5 pips of an active S/R zone shown on the chart. Stop loss must be set on the other side of the zone. ARIA highlights the valid zones with animated pulses to show where they are.
+
+
+TIER 2 — TRADER
+ARIA introduction line: "You can read the market. Now I will teach you how to trade it without destroying your account."
+Module 5: Your First Real Setup
+
+Lesson 1 — What is a Stop Loss: ARIA animates a trade going against the user — price falls, the SL line catches it, trade closes, small loss. Then plays the same trade without SL — price keeps falling, account devastated. Caption: "A stop loss is your exit when you are wrong. Every professional uses one on every single trade. No exceptions."
+Lesson 2 — What is a Take Profit: ARIA animates price reaching a TP level and the trade closing automatically with a positive result. Caption: "A take profit locks in your gain automatically. You do not need to watch the screen. Set it and let the plan execute."
+Lesson 3 — R:R Ratio explained: ARIA renders an animated R:R bar on screen — red segment for risk, green segment for reward. Shows 1:1, then 2:1, then 3:1. Caption: "R:R is how much you make vs how much you risk. At 2:1, you make $200 when right and lose $100 when wrong. You only need to be right 34% of the time to profit."
+Lesson 4 — The math of 2:1 over 100 trades: ARIA shows an animated table — 50 wins at 2:1 vs 50 losses at 1:1. Running total column fills in. Caption: "At 2:1 R:R with a 50% win rate, you are profitable over time. This is the edge. Protect it on every trade."
+Mission 5: Enter a trade with both SL and TP set. TP must be at minimum 2 times the SL distance. Both lines must be visible on the chart before submission is allowed.
+
+Module 6: Position Sizing
+
+Lesson 1 — What is a lot: ARIA renders an animated diagram showing lot sizes — micro 0.01, mini 0.1, standard 1.0 — with pip value calculations appearing for each. Caption: "A lot is the size of your trade. A standard lot on Gold means each pip is worth $1. A 0.01 micro lot means each pip is worth $0.01."
+Lesson 2 — The 1% rule: ARIA animates the math live on screen. $10,000 balance. 1% circle highlights $100. Caption: "Never risk more than 1% of your account on a single trade. On a $10,000 account that is $100. This is not optional. This is survival."
+Lesson 3 — Calculating lot size: ARIA walks through the formula with animated numbers. Stop loss = 20 pips. Risk = $100. Lot size = Risk ÷ (SL pips × pip value) = 0.10 lots. Caption: "Your lot size is determined by your stop loss distance, not by how confident you feel."
+Lesson 4 — Drawdown compounding: ARIA shows an animated chart of account equity — undisciplined trader losing 5% per trade vs disciplined trader losing 1% per trade. After 10 losses the difference is catastrophic. Caption: "Losing 10 trades in a row happens to every trader. The question is whether your account survives it."
+Mission 6: Complete 3 consecutive trades. Every trade must have a stop loss. Every trade risk must be under 1.5% of current balance. If any trade breaks the rule, the counter resets to zero and ARIA explains exactly what was wrong.
+
+Module 7: Entry Timing
+
+Lesson 1 — Anticipation vs confirmation: ARIA animates two traders — one entering before a candle closes (anticipating), price reverses against them. One waiting for the candle to close above the level (confirming), price continues in their direction. Caption: "Anticipation feels smart. It is usually wrong. Confirmation is slower. It is usually right."
+Lesson 2 — The confirmation candle: ARIA draws on the chart — a resistance level, a candle that closes above it with a full body, an entry arrow appearing after the close. Caption: "Wait for the candle to CLOSE, not just touch. A close is a commitment. A touch is a test."
+Lesson 3 — Pullback entries: ARIA animates a breakout, then a pullback to the broken level, then a continuation. Entry arrow appears at the pullback. Caption: "The best time to enter after a breakout is not during the spike. It is during the retest. Lower risk, higher reward, cleaner entry."
+Lesson 4 — Patience as a skill: ARIA displays a counter: "Trades skipped this session: 4. Trades taken: 1. Win rate: 100%." Caption: "The best traders are defined as much by the trades they do not take as by the ones they do. Patience is not passive. It is a decision."
+Mission 7: Wait for a candle to close above a resistance zone or below a support zone shown on the chart. Enter in the breakout direction within 2 candles of the close. SL below the zone. TP at 2:1.
+
+Module 8: Moving Averages
+
+Lesson 1 — What is an EMA: ARIA animates the EMA 21 line appearing over the candles, smoothly following price. Caption: "An Exponential Moving Average tracks the average price weighted toward recent candles. It tells you the current direction of momentum."
+Lesson 2 — EMA as dynamic support: ARIA highlights 3 instances on the chart where price pulled back to EMA 21 and bounced. Circles on each bounce. Caption: "In a strong trend, the EMA acts as a moving support or resistance line. Price pulls back to it, respects it, and continues."
+Lesson 3 — EMA 9 and EMA 21 crossover: ARIA animates the two EMAs crossing — golden cross where 9 crosses above 21 highlighted in teal, death cross where 9 crosses below 21 highlighted in red. Caption: "When the faster EMA crosses the slower one, momentum has shifted. This is your trend filter."
+Lesson 4 — Using EMA as a filter not a signal: Caption: "Never trade just because EMAs crossed. Use the crossover to confirm the trend direction, then wait for a price action entry from a level."
+Mission 8: Open a BUY trade only when EMA 9 is above EMA 21 on the live chart. Entry must be on a pullback to EMA 21 or EMA 9. Stop loss below the EMA. ARIA highlights when the setup is valid with a pulsing annotation.
+
+Module 9: RSI
+
+Lesson 1 — What is RSI: ARIA animates the RSI panel appearing below the chart. The line moves between 0 and 100. Caption: "RSI measures momentum — how fast and how far price has moved. Above 70 means overbought. Below 30 means oversold."
+Lesson 2 — Overbought and oversold: ARIA highlights moments on the chart where RSI hit 70 and price reversed, and RSI hit 30 and price reversed. Caption: "Extreme RSI readings do not mean sell or buy immediately. They mean the move may be exhausted. Wait for price confirmation."
+Lesson 3 — RSI divergence: ARIA draws on the chart — price making a higher high while RSI makes a lower high. Animated lines connecting the peaks. Caption: "Divergence is when price and RSI disagree. Price goes higher but RSI goes lower — momentum is fading even though price looks strong. This often precedes a reversal."
+Lesson 4 — RSI as a filter: Caption: "Use RSI to confirm or reject entries. If you want to buy and RSI is at 78, wait. If you want to buy and RSI is at 42 and rising, that is confluence."
+Mission 9: Open 2 trades with stop losses that both close in profit. At entry, RSI must not be in the opposite extreme — no buying above RSI 65, no selling below RSI 35.
+
+
+TIER 3 — PROFESSIONAL
+ARIA introduction line: "You have the foundation and the tools. Now I teach you the hardest part — trading your own psychology."
+Module 10: Breakouts
+
+Lesson 1 — What is a breakout: ARIA animates price approaching resistance, consolidating, then exploding through with a large candle body. Caption: "A breakout is when price escapes a level it has been respecting. This releases trapped energy — the move can be fast and large."
+Lesson 2 — False breakouts: ARIA animates a price spike above resistance, then immediate reversal back below. Caption: "False breakouts are traps. Price spikes through a level to trigger stop losses, then reverses. This is why you wait for a candle close — not a wick."
+Lesson 3 — The retest: ARIA animates a clean breakout, then a pullback to the broken level, then continuation. Caption: "After a real breakout, price often retests the broken level. This is your second chance entry — lower risk than the initial breakout."
+Lesson 4 — Volume confirmation: ARIA shows volume bars animating during a breakout — tall green bars during the break, smaller bars during the retest. Caption: "Real breakouts have volume. If price breaks a level on tiny candles and low volume, be skeptical."
+Mission 10: During a BREAKOUT regime on the live chart, enter in the breakout direction with a 2:1 R:R minimum. ARIA announces the breakout event with a visible alert when it occurs.
+
+Module 11: Range Trading
+
+Lesson 1 — What is a range: ARIA draws two parallel horizontal lines on the chart with price bouncing between them. Caption: "A range is when price is trapped between support and resistance with no clear trend. The market is in balance."
+Lesson 2 — Fading the extremes: ARIA highlights range tops and bottoms with animated reversal entry arrows. Caption: "In a range, the edge is simple: sell near the top, buy near the bottom. The range boundary is your S/R level."
+Lesson 3 — Range breakout warning: Caption: "Ranges end. When a range breaks, the move is often violent. Always use a stop loss outside the range when trading the boundaries."
+Lesson 4 — Identifying a range early: ARIA shows 3 touches on resistance and 3 touches on support with animated horizontal bands appearing. Caption: "You need at least 2 touches on each side to confirm a range. More touches means stronger boundaries and higher probability reversal trades."
+Mission 11: During a RANGE regime, open 2 trades from S/R zone bounces within 5 pips of the zone. Both must close in profit.
+
+Module 12: Trade Psychology
+
+Lesson 1 — Revenge trading: ARIA animates a sequence — loss, immediate re-entry, another loss, immediate re-entry, account destroyed. Caption: "Revenge trading is opening a new trade to recover a loss. It is emotional, not analytical. It kills accounts faster than any bad strategy."
+Lesson 2 — FOMO: ARIA shows a big candle moving up fast with no entry, user chasing late, price reversing on them. Caption: "Fear Of Missing Out makes you enter after the move has already happened. The best entry was 10 candles ago. This entry is the worst one."
+Lesson 3 — Overconfidence after a winning streak: ARIA shows a streak counter hitting 5, user increasing lot size massively, large loss wiping the gains. Caption: "A winning streak does not mean your edge improved. It means you were right recently. Probability does not have memory."
+Lesson 4 — The process over the outcome: Caption: "A good trade that loses is still a good trade. A bad trade that wins is still a bad trade. Judge your decisions by the quality of the process, not the outcome of that one trade."
+Mission 12: Complete 5 consecutive trades. All must have stop losses. No revenge trading detected. No FOMO entry detected (no entry within 2 candles of a large spike candle). No lot size increase after a loss. ARIA monitors all 5 in real time and calls out violations.
+
+Module 13: Full Strategy Integration
+
+Lesson 1 — The complete checklist: ARIA displays an animated pre-trade checklist filling in: Trend direction identified ✓, Entry near S/R level ✓, Confirmation candle closed ✓, EMA confluence ✓, RSI not extreme ✓, Stop loss set ✓, R:R at least 2:1 ✓, Risk under 1% ✓. Caption: "Every professional trade runs through a checklist. When the checklist passes, you enter. When it fails, you wait."
+Lesson 2 — Putting it all together: A full trade walkthrough animated on the chart — ARIA identifies trend, marks S/R zone, waits for confirmation candle, shows EMA alignment, shows RSI, enters with SL and TP drawn on chart, trade plays out, closes at TP.
+Mission 13 — The Final Exam: Complete 10 trades in one session. Win rate must be 60% or higher. Every trade must have a stop loss. No trade may exceed 1.5% risk. No revenge trading. No FOMO entries. No SL widening. ARIA grades every trade individually and gives a final score out of 100. A score of 70 or above graduates the user as a Professional Trader.
+
+
+HOW LESSONS WORK — TECHNICAL IMPLEMENTATION
+Each lesson is implemented as an ARIALesson object. When a lesson starts:
+
+The chart pauses price generation or continues but overlays a semi-transparent dim layer
+ARIA's panel expands and she delivers her narration via typewriter animation
+Simultaneously, canvas annotations animate on the chart — lines draw themselves, labels appear, candles highlight, brackets animate
+When narration completes a "Next" button appears or it auto-advances after 5 seconds
+User can replay any completed lesson from the module overview screen
+
+Each lesson object contains:
+
+id, title, narration — ARIA's full spoken text
+annotationSequence — array of timed canvas drawing commands that execute in sync with narration
+duration — expected lesson length in seconds
+replayable — boolean
+
+All 13 modules × average 4 lessons = approximately 52 lessons total. Every single one must be implemented with real canvas animations. No placeholders.
+
+HOW MISSIONS WORK — TECHNICAL IMPLEMENTATION
+Each mission is a TradingMission object with:
+
+id, title, briefing — ARIA's mission briefing
+criteria — array of MissionCriterion objects, each with an id, description, check function, and isMet boolean
+progressDisplay — how to show live progress (counter, checklist, percentage)
+xpReward — scales by module: Module 1 = 100 XP, Module 13 = 1000 XP
+successMessage — ARIA's specific success speech referencing what was done correctly
+failureMessage — ARIA's specific failure speech with exact explanation of what was missing
+ariaGuidanceMessages — array of 6+ live messages ARIA sends during mission execution, specific to the mission's concept
+
+Mission validation runs on every trade close and on every trade open attempt. ARIA must never let a user submit a trade that violates mission requirements without first warning them in amber mode. If they override the warning (some missions allow trades that are not perfect), ARIA flags the violation but lets it proceed and notes it in the mission debrief.
+
+ARIA OVERHAUL
+With the lesson structure, ARIA now has five modes instead of three:
+
+TEACHING (teal): delivering a lesson narration
+GUIDING (teal, pulsing): during a mission, giving live setup guidance
+WATCHING (blue): trade is open, monitoring and commenting
+CAUTION (amber): violation about to be made, blocking or warning
+DANGER (red): revenge trading, cooldown active, serious intervention
+CELEBRATING (green pulse): mission complete, module complete, graduation
+
+ARIA must send genuinely different messages at each module based on what concepts have been taught. In Module 1 she uses beginner language. In Module 13 she speaks to the user as a peer professional. Her vocabulary and complexity must scale across the 13 modules.
+
+PROGRESSION AND PERSISTENCE
+Save everything to localStorage:
+
+Which lessons have been completed (by lesson ID)
+Which missions have been completed (by mission ID)
+Current active lesson or mission
+All XP and level data
+Full trade journal
+All achievements
+User profile: name, archetype, total time in app
+Session statistics per module
+
+On reload: Restore exactly where the user was. If they were mid-lesson, restart the lesson from the beginning. If they were mid-mission, restore mission progress and show how many criteria are already met.
+XP scaling:
+
+Lesson completed: +20 XP
+Mission completed: Module number × 75 XP
+Module completed: Module number × 150 XP bonus
+Trade with full checklist passed: +25 XP bonus
+Perfect mission (all criteria met on first attempt): +100 XP bonus
+
+Levels: Threshold scales ×1.4 each level starting at 150 XP for Level 2. User should reach Level 5 approximately at Module 5 completion under normal play.
+
+MODULE OVERVIEW SCREEN
+Between the top bar and the chart, when no lesson or mission is active, show a compact module overview strip:
+
+Current module name and number
+Lessons in module shown as small circles — completed (teal filled), current (pulsing outline), locked (dark)
+Mission shown as a star icon — locked, active, or complete
+"Start Lesson" or "Continue" button that is always obvious
+"Review Past Lessons" expandable section showing all completed lessons with replay buttons
+
+
+ACHIEVEMENT OVERHAUL
+Replace the 8 current achievements with 20 achievements spanning the full academy journey:
+First Steps, First Win, Candle Reader, Trend Spotter, Level Setter (first SL), Risk Aware (first trade under 1%), Confirmation Seeker (waited for candle close), EMA Trader, RSI Reader, Breakout Hunter, Range Rider, Streak of 3, Streak of 5, Ice Veins (held to SL without moving it), Diamond Hands (held winning trade 15+ candles), Revenge Proof (ended session after 2 losses), Checklist Trader (5 trades with full checklist), Module Master (complete any module without a mission failure), Tier Graduate (complete each tier), and Professional Trader (complete the full academy with 70+ final exam score).
+
+ONBOARDING
+First-time users see a 4-screen onboarding before the chart:
+Screen 1: ARIA appears large center-screen with glitch animation. Typewriter: "Welcome to TradeSchool. I am ARIA — your Adaptive Risk Intelligence Agent. I will be with you every step of the way from your very first trade to your graduation as a professional."
+Screen 2: Name entry and archetype selection — Scalper, Swing Trader, Risk Manager. Each archetype card shows what ARIA's coaching style will be like.
+Screen 3: Five tooltip overlays walking through the UI one element at a time with ARIA narrating each one.
+Screen 4: Module 1 Lesson 1 begins automatically.
+
+SETTINGS
+
+Display name edit
+Archetype change with confirmation
+Sound toggle and volume
+Lesson animation speed: Normal / Fast / Instant
+Chart candle speed: 1s / 2s / 3s
+Reset all progress with typed confirmation
+Dev mode: Ctrl+Shift+D — skip any lesson, skip any mission, unlock all modules
+
+
+FINAL QUALITY BAR
+When you are done, this must be true: A person who has never heard the word "pip" opens this app. ARIA greets them. Lesson 1 plays and they understand what price is from watching a 30-second chart animation. They complete Module 1 in 10 minutes and feel genuinely accomplished. By Module 6 they understand position sizing better than most retail traders. By Module 13 they are executing trades with a full professional checklist. Every concept was shown to them on the actual chart by ARIA before they were ever asked to apply it. They never felt lost. They never had to guess what to do next. The app respected their intelligence and rewarded their discipline.
+That is the standard. Read every file first. Audit everything. Then rebuild.

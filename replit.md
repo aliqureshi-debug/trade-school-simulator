@@ -1,76 +1,101 @@
-# TradeSchool — AI Trading Education Platform
+# TradeSchool — Trading Academy Platform
 
 ## Overview
 
-TradeSchool is an interactive trading simulator and education platform. Users progress through a 12-phase curriculum guided by ARIA, an AI coach, learning market structure, risk management, and trading psychology through hands-on practice with simulated price action.
+TradeSchool is a full Trading Academy — a browser-based trading education platform with 3 tiers, 13 modules, 52 animated canvas lessons, 13 missions with real-time validation, 6-mode ARIA coaching, 20 achievements, and 4-screen onboarding.
 
 ## Architecture
 
 - **Frontend**: React 19 + Vite + TypeScript + Tailwind CSS + shadcn/ui
-- **Routing**: wouter (lightweight client-side routing)
+- **Routing**: wouter (client-side)
 - **Animations**: framer-motion throughout
-- **State**: React hooks (no Redux, no backend DB needed)
+- **State**: React hooks (all client-side, no backend DB)
 - **Audio**: Web Audio API via custom soundEngine
-- **Charting**: Custom canvas-based candlestick renderer
+- **Charting**: Custom canvas-based candlestick renderer with 8 annotation types
 
 ## Key Files
 
 | File | Purpose |
 |---|---|
-| `src/pages/Index.tsx` | Main application layout (header, stats, chart, coach, controls) |
-| `src/hooks/useTradingEngine.ts` | Core state machine: phase progression, trades, XP, cooldown, ARIA |
-| `src/types/trading.ts` | All TypeScript types: Trade, Phase, Challenge, SRZone, PlayerStats, AriaState |
-| `src/lib/phases.ts` | 12-phase curriculum with challenges, XP rewards, unlock criteria |
-| `src/lib/chartEngine.ts` | Price generation, EMA, SR zones, regime transitions, swing points |
-| `src/lib/coachEngine.ts` | ARIA message generation, state transitions (teal/amber/red), revenge detection |
-| `src/lib/soundEngine.ts` | Web Audio synthesis: candle tick, trade win/loss, phase unlock, level-up |
-| `src/components/CandlestickChart.tsx` | Canvas chart with pan/zoom/crosshair/EMA/SR bands/SL-TP lines |
-| `src/components/CoachPanel.tsx` | ARIA avatar (breathing animation), typewriter messages, state badge |
-| `src/components/TradingControls.tsx` | Lot size slider, SL/TP inputs with auto-suggest, R:R bar, cooldown UI |
-| `src/components/StatsBar.tsx` | XP shimmer bar, level badge, trade stats, AchievementToast |
-| `src/components/ChallengeCard.tsx` | Active phase challenge card with progress and XP reward |
-| `src/components/PhaseUnlockOverlay.tsx` | Full-screen celebration overlay on phase advancement |
-| `src/components/PhaseBadge.tsx` | Phase pill in header with full curriculum tooltip |
+| `src/pages/Index.tsx` | Main layout — integrates all engines, handles lesson/mission flow, onboarding, settings |
+| `src/types/trading.ts` | All TypeScript types: Trade, ARIALesson, TradingMission, AcademyModule, PlayerStats, AriaMode, LessonProgress |
+| `src/hooks/useTradingEngine.ts` | Core engine: candles, trades, XP, achievements, ARIA mode, persistence |
+| `src/hooks/useLessonEngine.ts` | Lesson state machine: typewriter animation, annotation progress, rAF loop |
+| `src/hooks/useMissionEngine.ts` | Mission validation: per-mission criteria checking for all 13 missions |
+| `src/lib/academy.ts` | 13 modules × 4 lessons + 1 mission each = 52 lessons, 13 missions, full narrations |
+| `src/lib/ariaEngine.ts` | ARIA message generation for all 6 modes, replaces old coachEngine.ts |
+| `src/lib/persistence.ts` | SavedState v2 (STORAGE_KEY: tradeschool_v2), validators, buildDefaultLessonProgress |
+| `src/lib/chartEngine.ts` | OHLCV generation, EMA, SR zones, market regime transitions |
+| `src/lib/soundEngine.ts` | Web Audio synthesis: candle tick, trade win/loss, level-up, achievement |
+| `src/components/CandlestickChart.tsx` | Canvas chart with pan/zoom/crosshair/EMA/SR/SL-TP + 8 annotation types |
+| `src/components/CoachPanel.tsx` | ARIA avatar with 6 mode states, mission HUD with criteria checklist |
+| `src/components/LessonOverlay.tsx` | Lesson typewriter UI with Next/Skip controls |
+| `src/components/ModuleOverviewStrip.tsx` | Lesson dots, mission star, module progress, replay UI |
+| `src/components/MissionDebrief.tsx` | Mission success/failure overlay with criteria checklist + Final Exam score |
+| `src/components/Onboarding.tsx` | 4-screen onboarding: ARIA glitch intro → name/archetype → UI tour → start |
+| `src/components/SettingsModal.tsx` | Profile, display (lesson speed, candle speed, sound), reset with RESET confirmation |
+| `src/components/StatsBar.tsx` | XP bar, tier/module display, balance, P&L, win streak, achievements |
+| `src/components/TradingControls.tsx` | Lot size, SL/TP inputs, R:R bar, cooldown UI |
 | `src/components/TradeHistory.tsx` | Scrollable trade log |
+
+## Academy Structure
+
+### 3 Tiers
+- **Tier 1: RECRUIT** (Modules 1–4) — Foundation: The Market, Candles, Trend, S&R
+- **Tier 2: TRADER** (Modules 5–9) — First Setup, Position Sizing, Entry Timing, EMAs, RSI
+- **Tier 3: PROFESSIONAL** (Modules 10–13) — Breakouts, Range Trading, Psychology, Final Exam
+
+### 6 ARIA Modes
+`teaching` | `guiding` | `watching` | `caution` | `danger` | `celebrating`
+
+### XP System
+- Lesson: +20 XP
+- Mission: `Math.round(100 + (900/12) × (moduleId-1))`
+- Module bonus: `moduleId × 150`
+- Achievement: +25 XP
+- Level threshold: 150 XP for L2, ×1.4 per level
+
+### Persistence
+- STORAGE_KEY: `tradeschool_v2` (incompatible with old v1 saves — intentional)
+- All progress auto-saved with 500ms debounce
 
 ## Features
 
-### 12-Phase Curriculum
-Phases 1–12 cover: Market Orientation → Candles → Support/Resistance → Trends → Entries → Risk Management → Trade Management → Psychology → Confluences → Advanced Patterns → Consistency → Mastery.
+### Lesson Engine
+- Per-lesson typewriter narration at normal/fast/instant speed
+- 8 annotation types rendered on canvas: arrow, label, circle, bracket, highlight, line, band, crossout
+- Animations: draw, fade, pop — keyed to `startAtMs` + `durationMs` per annotation
+- rAF loop with `canAdvance` gating
 
-### ARIA AI Coach
-Three states: **teal** (teaching/calm), **amber** (warning), **red** (danger — revenge trading detected).
-- Typewriter-style messages with contextual coaching
-- Revenge trading detection: 3+ losses in 5 minutes triggers cooldown
-- 90-second cooldown with animated countdown
+### Mission Engine
+- Per-mission validation for all 13 missions
+- Real-time criteria checking on trade open and close
+- Mission HUD in CoachPanel shows live criterion status
+- MissionDebrief overlay on success/failure
+
+### ARIA Coach
+- Message types: learn, action, review, warn, danger
+- Revenge trading detection: 3 rapid losses → 45s cooldown
+- Commentary on open trades every 7 ticks (~14s at 2s candles)
+- Market condition messages every 12 ticks when not in lesson/mission
 
 ### Chart Engine
-- Synthetic OHLCV generation with 4 market regimes (trend-up, trend-down, range, volatile)
-- EMA 9 (yellow) and EMA 21 (purple) overlays
-- Dynamic support/resistance zones with semi-transparent bands
+- 6 market regimes: uptrend, downtrend, range, breakout, volatile, transition
+- EMA 9 (yellow) and EMA 21 (purple)
+- Dynamic S/R zones with semi-transparent bands
 - Pan (drag), zoom (scroll wheel), crosshair on hover
 
-### Risk Management
-- Lot size slider (0.01–5.0) with balance-relative risk %
-- Auto-suggested SL/TP based on ATR and nearest S/R levels
-- R:R visualization bar
-- P&L = priceDiff × lotSize × 100
-
-### Sound Design
-Web Audio API synthesis (no audio files needed):
-- Candle tick: quiet click
-- Trade win: ascending tones
-- Trade loss: descending buzz
-- Phase unlock: triumphant chord
-- Level up: sparkle arp
-
-### Animations
-- framer-motion: page entrance (slide in from edges), achievement toasts, phase unlock particles, vignette flash on trade close
+### Onboarding
+- Screen 1: ARIA glitch intro with typewriter welcome
+- Screen 2: Name input + archetype selection (Scalper / Swing / Risk Manager)
+- Screen 3: 5-stop UI tour carousel
+- Screen 4: Profile summary + "Start the Academy"
 
 ## Dev Tools
-- `Ctrl+Shift+D` in-browser: instant phase unlock + XP fill (dev shortcut)
-- Pause button in header pauses price simulation
-- Mute button toggles all sound synthesis
+- `Ctrl+Shift+D`: unlock all modules + fill XP (activates dev panel in Settings)
+- Settings → Display: Dev panel with Skip Lesson and Unlock All buttons
+- Pause button: stops price simulation
+- Mute button: toggles all sound synthesis
 
 ## Workflow
 - **Dev**: `npm run dev` — Express + Vite on port 5000
@@ -79,8 +104,8 @@ Web Audio API synthesis (no audio files needed):
 ## Dependencies (key)
 - react, react-dom 19
 - vite, typescript
-- tailwindcss, shadcn/ui components
+- tailwindcss, shadcn/ui
 - framer-motion
-- wouter (routing)
-- lucide-react (icons)
-- @tanstack/react-query (setup but not used for API — all state is client-side)
+- wouter
+- lucide-react
+- @tanstack/react-query (setup, client-side only)

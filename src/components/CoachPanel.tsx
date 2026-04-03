@@ -1,67 +1,106 @@
-import { useEffect, useRef, useState } from 'react';
-import { CoachMessage, AriaState } from '@/types/trading';
+import { useEffect, useRef } from 'react';
+import { CoachMessage, AriaMode } from '@/types/trading';
+import { TradingMission } from '@/types/trading';
+import { CriteriaStatus } from '@/hooks/useMissionEngine';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface CoachPanelProps {
   messages: CoachMessage[];
-  ariaState: AriaState;
+  ariaMode: AriaMode;
+  cooldownSeconds?: number;
+  activeMission?: TradingMission | null;
+  criteriaStatus?: CriteriaStatus[];
+  missionActive?: boolean;
 }
 
-const typeBadge: Record<CoachMessage['type'], { label: string; className: string }> = {
-  learn: { label: 'LEARN', className: 'bg-primary/20 text-primary' },
-  action: { label: 'ACTION', className: 'bg-emerald-500/20 text-emerald-400' },
-  review: { label: 'REVIEW', className: 'bg-yellow-500/20 text-yellow-400' },
-  warn: { label: 'WARN', className: 'bg-amber-500/20 text-amber-400' },
-  danger: { label: 'DANGER', className: 'bg-red-500/20 text-red-400' },
+const typeBadge: Record<CoachMessage['type'], { label: string; color: string }> = {
+  learn: { label: 'LEARN', color: '#00d4aa' },
+  action: { label: 'ACTION', color: '#1dd278' },
+  review: { label: 'REVIEW', color: '#facc15' },
+  warn: { label: 'WARN', color: '#f59e0b' },
+  danger: { label: 'DANGER', color: '#ef4444' },
 };
 
-const ariaColors: Record<AriaState, { border: string; glow: string; bg: string; dot: string }> = {
-  teal: {
-    border: 'hsl(174, 100%, 37%)',
-    glow: 'rgba(0, 190, 180, 0.5)',
-    bg: 'rgba(0, 190, 180, 0.12)',
-    dot: 'hsl(152, 100%, 39%)',
+const ariaColors: Record<AriaMode, { border: string; glow: string; bg: string; dot: string; label: string }> = {
+  teaching: {
+    border: '#00d4aa',
+    glow: 'rgba(0,212,170,0.4)',
+    bg: 'rgba(0,212,170,0.08)',
+    dot: '#00d4aa',
+    label: 'TEACHING',
   },
-  amber: {
-    border: 'hsl(40, 100%, 55%)',
-    glow: 'rgba(255, 180, 0, 0.5)',
-    bg: 'rgba(255, 180, 0, 0.08)',
-    dot: 'hsl(40, 100%, 55%)',
+  guiding: {
+    border: '#00d4aa',
+    glow: 'rgba(0,212,170,0.25)',
+    bg: 'rgba(0,212,170,0.06)',
+    dot: '#00d4aa',
+    label: 'GUIDING',
   },
-  red: {
-    border: 'hsl(0, 90%, 55%)',
-    glow: 'rgba(220, 50, 50, 0.5)',
-    bg: 'rgba(220, 50, 50, 0.08)',
-    dot: 'hsl(0, 90%, 55%)',
+  watching: {
+    border: '#3b82f6',
+    glow: 'rgba(59,130,246,0.25)',
+    bg: 'rgba(59,130,246,0.06)',
+    dot: '#3b82f6',
+    label: 'WATCHING',
+  },
+  caution: {
+    border: '#f59e0b',
+    glow: 'rgba(245,158,11,0.4)',
+    bg: 'rgba(245,158,11,0.08)',
+    dot: '#f59e0b',
+    label: 'CAUTION',
+  },
+  danger: {
+    border: '#ef4444',
+    glow: 'rgba(239,68,68,0.4)',
+    bg: 'rgba(239,68,68,0.08)',
+    dot: '#ef4444',
+    label: 'DANGER',
+  },
+  celebrating: {
+    border: '#1dd278',
+    glow: 'rgba(29,210,120,0.5)',
+    bg: 'rgba(29,210,120,0.1)',
+    dot: '#1dd278',
+    label: 'CELEBRATING',
   },
 };
 
 function TypewriterText({ text, id }: { text: string; id: string }) {
-  const [displayed, setDisplayed] = useState('');
+  const displayedRef = useRef('');
   const indexRef = useRef(0);
   const prevIdRef = useRef('');
+  const spanRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     if (prevIdRef.current === id) return;
     prevIdRef.current = id;
     indexRef.current = 0;
-    setDisplayed('');
+    displayedRef.current = '';
 
     const interval = setInterval(() => {
       indexRef.current++;
-      setDisplayed(text.slice(0, indexRef.current));
+      displayedRef.current = text.slice(0, indexRef.current);
+      if (spanRef.current) spanRef.current.textContent = displayedRef.current;
       if (indexRef.current >= text.length) clearInterval(interval);
-    }, 18);
+    }, 16);
 
     return () => clearInterval(interval);
   }, [id, text]);
 
-  return <span>{displayed}</span>;
+  return <span ref={spanRef}></span>;
 }
 
-export function CoachPanel({ messages, ariaState }: CoachPanelProps) {
+export function CoachPanel({
+  messages,
+  ariaMode,
+  cooldownSeconds = 0,
+  activeMission,
+  criteriaStatus = [],
+  missionActive = false,
+}: CoachPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const colors = ariaColors[ariaState];
+  const colors = ariaColors[ariaMode];
   const lastN = messages.slice(-8);
 
   useEffect(() => {
@@ -70,66 +109,129 @@ export function CoachPanel({ messages, ariaState }: CoachPanelProps) {
     }
   }, [messages]);
 
+  const isPulsing = ariaMode === 'teaching' || ariaMode === 'celebrating' || ariaMode === 'guiding';
+
   return (
-    <div className="flex flex-col h-full">
-      {/* ARIA Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border" style={{ background: colors.bg, transition: 'background 0.8s ease' }}>
+    <div className="flex flex-col h-full" data-testid="coach-panel">
+      <div
+        className="flex items-center gap-3 px-4 py-3 border-b border-border shrink-0"
+        style={{ background: colors.bg, transition: 'background 0.8s ease' }}
+      >
         <div className="relative shrink-0">
-          {/* Breathing border animation */}
           <div
-            className="w-10 h-10 rounded-full flex items-center justify-center text-lg"
+            className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm"
             style={{
               border: `2px solid ${colors.border}`,
               boxShadow: `0 0 12px ${colors.glow}`,
-              animation: 'ariaBreath 3s ease-in-out infinite',
               background: colors.bg,
+              color: colors.border,
               transition: 'border-color 0.8s, box-shadow 0.8s',
+              animation: isPulsing ? 'pulse 2s ease-in-out infinite' : 'none',
             }}
           >
-            🎓
+            A
           </div>
           <div
             className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-card"
             style={{ background: colors.dot, transition: 'background 0.5s' }}
           />
         </div>
+
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-bold text-foreground">ARIA</h3>
             <span
               className="text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider"
-              style={{ color: colors.border, background: colors.bg, border: `1px solid ${colors.border}`, transition: 'all 0.5s' }}
+              style={{
+                color: colors.border,
+                background: `${colors.border}18`,
+                border: `1px solid ${colors.border}40`,
+                transition: 'all 0.5s',
+                animation: ariaMode === 'celebrating' ? 'pulse 1s ease-in-out infinite' : 'none',
+              }}
             >
-              {ariaState === 'teal' ? 'Teaching' : ariaState === 'amber' ? 'Caution' : 'Alert'}
+              {colors.label}
             </span>
           </div>
-          <p className="text-[10px] text-muted-foreground truncate">Always watching, always teaching</p>
+          <p className="text-[10px] text-muted-foreground truncate">
+            {ariaMode === 'teaching' && 'Delivering lesson narration'}
+            {ariaMode === 'guiding' && 'Guiding your mission'}
+            {ariaMode === 'watching' && 'Monitoring your trade'}
+            {ariaMode === 'caution' && 'Warning — check your plan'}
+            {ariaMode === 'danger' && cooldownSeconds > 0 ? `Cooldown: ${cooldownSeconds}s` : ariaMode === 'danger' ? 'Intervention active' : ''}
+            {ariaMode === 'celebrating' && 'Achievement unlocked!'}
+          </p>
         </div>
+
+        {cooldownSeconds > 0 && (
+          <div
+            className="shrink-0 text-xs font-bold font-mono px-2 py-1 rounded"
+            style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', color: '#ef4444' }}
+            data-testid="text-cooldown"
+          >
+            {cooldownSeconds}s
+          </div>
+        )}
       </div>
 
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2.5 min-h-0">
+      {missionActive && activeMission && criteriaStatus.length > 0 && (
+        <div
+          className="px-3 py-2 border-b shrink-0"
+          style={{ borderColor: 'rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.2)' }}
+          data-testid="mission-hud"
+        >
+          <div className="text-[9px] font-bold uppercase tracking-widest mb-1.5" style={{ color: '#f59e0b' }}>
+            MISSION: {activeMission.title}
+          </div>
+          <div className="space-y-1">
+            {criteriaStatus.map(c => (
+              <div key={c.id} className="flex items-center gap-1.5 text-[9px]">
+                <span
+                  className="w-3 h-3 rounded-full shrink-0 flex items-center justify-center"
+                  style={{
+                    background: c.isMet ? 'rgba(29,210,120,0.2)' : 'rgba(255,255,255,0.05)',
+                    border: `1px solid ${c.isMet ? '#1dd278' : 'rgba(255,255,255,0.1)'}`,
+                    color: c.isMet ? '#1dd278' : '#4b5563',
+                    fontSize: 7,
+                  }}
+                >
+                  {c.isMet ? '✓' : '○'}
+                </span>
+                <span className={c.isMet ? 'text-foreground' : 'text-muted-foreground'} style={{ lineHeight: 1.3 }}>
+                  {c.description}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
         <AnimatePresence initial={false}>
           {lastN.map((message, idx) => {
             const badge = typeBadge[message.type];
             const isLast = idx === lastN.length - 1;
-            const opacity = Math.max(0.3, 0.4 + (idx / lastN.length) * 0.6);
+            const opacity = Math.max(0.35, 0.4 + (idx / lastN.length) * 0.6);
 
             return (
               <motion.div
                 key={message.id}
-                initial={{ opacity: 0, y: 12, scale: 0.97 }}
+                initial={{ opacity: 0, y: 10, scale: 0.98 }}
                 animate={{ opacity, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.3, ease: 'easeOut' }}
-                className="rounded-lg p-3 border border-border/40"
-                style={{ background: 'linear-gradient(135deg, hsl(174 30% 12%), hsl(215 25% 10%))' }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.25, ease: 'easeOut' }}
+                className="rounded-lg p-2.5 border border-border/30"
+                style={{ background: 'rgba(255,255,255,0.025)' }}
+                data-testid={isLast ? 'coach-message-latest' : undefined}
               >
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${badge.className}`}>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span
+                    className="text-[8px] font-bold px-1.5 py-[1px] rounded uppercase"
+                    style={{ background: `${badge.color}18`, color: badge.color, border: `1px solid ${badge.color}30` }}
+                  >
                     {badge.label}
                   </span>
-                  <span className="text-[9px] text-muted-foreground font-mono">
+                  <span className="text-[8px] text-muted-foreground font-mono">
                     {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>

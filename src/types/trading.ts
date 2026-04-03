@@ -28,9 +28,19 @@ export interface Trade {
   status: 'open' | 'closed';
   hadStopLoss: boolean;
   rrRatio?: number;
+  candlesHeld?: number;
+  missionId?: string;
 }
 
-export type AriaState = 'teal' | 'amber' | 'red';
+export type AriaMode =
+  | 'teaching'
+  | 'guiding'
+  | 'watching'
+  | 'caution'
+  | 'danger'
+  | 'celebrating';
+
+export type AriaState = AriaMode;
 
 export type UserArchetype = 'scalper' | 'swing' | 'risk-manager';
 
@@ -38,14 +48,6 @@ export interface UserProfile {
   name: string;
   archetype: UserArchetype;
   created: number;
-}
-
-export interface DisciplineScore {
-  total: number;
-  stopLossAdherence: number;
-  rrDiscipline: number;
-  noRevengeTrade: number;
-  consistencyBonus: number;
 }
 
 export interface CoachMessage {
@@ -64,47 +66,6 @@ export interface Achievement {
   unlockedAt?: number;
 }
 
-export interface ChallengeCriteria {
-  requireStopLoss?: boolean;
-  requireTakeProfit?: boolean;
-  tradeType?: 'buy' | 'sell';
-  minRR?: number;
-  maxRiskPercent?: number;
-  mustBeProfit?: boolean;
-  count?: number;
-}
-
-export interface ChallengeCriterion {
-  id: string;
-  description: string;
-  check: (trade: Trade, stats: PlayerStats) => boolean;
-}
-
-export interface Challenge {
-  title: string;
-  description: string;
-  instruction: string;
-  criteria: ChallengeCriteria;
-  xpReward: number;
-  failureMessage: string;
-  successMessage: string;
-}
-
-export interface DailyChallenge {
-  id: string;
-  title: string;
-  description: string;
-  xpReward: number;
-  progress: number;
-  target: number;
-  completed: boolean;
-  resetAt: number;
-}
-
-export interface WeeklyChallenge extends DailyChallenge {
-  weeklyResetAt: number;
-}
-
 export type NewsEventState = 'idle' | 'preWarning' | 'spike' | 'retracement';
 
 export interface NewsEvent {
@@ -114,23 +75,102 @@ export interface NewsEvent {
   spikeAmount: number;
 }
 
-export interface SwingPoint {
-  index: number;
-  price: number;
-  type: 'high' | 'low';
+export type MarketCondition = 'uptrend' | 'downtrend' | 'range' | 'breakout' | 'volatile' | 'transition';
+
+export interface MarketRegime {
+  condition: MarketCondition;
+  candlesRemaining: number;
 }
 
-export interface Phase {
+export type LessonAnnotationType =
+  | 'arrow'
+  | 'label'
+  | 'circle'
+  | 'bracket'
+  | 'highlight'
+  | 'line'
+  | 'band'
+  | 'crossout';
+
+export interface LessonAnnotation {
+  type: LessonAnnotationType;
+  startAtMs: number;
+  durationMs: number;
+  candleRef?: 'last' | 'last-1' | 'last-2' | 'last-3' | 'last-4' | 'last-5';
+  priceRef?: number;
+  priceDelta?: number;
+  x?: number;
+  y?: number;
+  x2?: number;
+  y2?: number;
+  text?: string;
+  color?: string;
+  animateIn?: 'draw' | 'fade' | 'pop';
+}
+
+export interface ARIALesson {
+  id: string;
+  moduleId: number;
+  lessonNumber: number;
+  title: string;
+  narration: string;
+  caption: string;
+  annotationSequence: LessonAnnotation[];
+  duration: number;
+  replayable: boolean;
+}
+
+export interface MissionState {
+  tradesAttempted: number;
+  tradesMeetingCriteria: number;
+  consecutiveCompliant: number;
+  firstAttempt: boolean;
+  candlesHeldOpen: number;
+  highestCandlesHeld: number;
+  openedInUptrend: boolean;
+  closedInProfit: boolean;
+  customFlags: Record<string, unknown>;
+}
+
+export interface MissionCriterion {
+  id: string;
+  description: string;
+}
+
+export interface TradingMission {
+  id: string;
+  moduleId: number;
+  title: string;
+  briefing: string;
+  criteria: MissionCriterion[];
+  progressDisplay: 'counter' | 'checklist' | 'percentage';
+  xpReward: number;
+  successMessage: string;
+  failureMessage: string;
+  ariaGuidanceMessages: string[];
+}
+
+export interface AcademyModule {
   id: number;
   title: string;
-  subtitle: string;
-  desc: string;
-  ariaIntroMessage: string;
-  conceptToTeach: string;
-  chartAnnotations: string[];
-  challenge: Challenge;
-  unlocksFeatures: string[];
-  requiredXP: number;
+  tier: 1 | 2 | 3;
+  tierName: 'RECRUIT' | 'TRADER' | 'PROFESSIONAL';
+  ariaIntroLine: string;
+  lessons: ARIALesson[];
+  mission: TradingMission;
+}
+
+export interface LessonProgress {
+  completedLessonIds: string[];
+  completedMissionIds: string[];
+  currentModuleId: number;
+  currentLessonIndex: number;
+  missionActive: boolean;
+  missionState: MissionState | null;
+  hasCompletedOnboarding: boolean;
+  userProfile: UserProfile | null;
+  lessonSpeed: 'normal' | 'fast' | 'instant';
+  candleSpeedMs: number;
 }
 
 export interface PlayerStats {
@@ -143,17 +183,9 @@ export interface PlayerStats {
   balance: number;
   startingBalance: number;
   achievements: Achievement[];
-  phase: number;
-  conceptsSeen: string[];
-  challengeProgress: number;
   stopLossCount: number;
-}
-
-export type MarketCondition = 'uptrend' | 'downtrend' | 'range' | 'breakout' | 'volatile' | 'transition';
-
-export interface MarketRegime {
-  condition: MarketCondition;
-  candlesRemaining: number;
+  winStreak: number;
+  maxWinStreak: number;
 }
 
 export interface SessionResult {
@@ -161,7 +193,5 @@ export interface SessionResult {
   winRate: number;
   bestTrade: number;
   worstTrade: number;
-  disciplineScore: number;
-  ariaVerdict: string;
   xpEarned: number;
 }
