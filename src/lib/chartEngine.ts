@@ -13,7 +13,7 @@ let volatilityClusterDir = 1;
 let volatilityClusterTick = 0;
 
 // News event state
-let nextNewsCountdown = 50 + Math.floor(Math.random() * 30);
+let nextNewsCountdown = 50 + Math.floor(Math.random() * 31);
 let newsPhase: NewsEventState = 'idle';
 let newsPhaseCountdown = 0;
 let newsDirection: 'up' | 'down' = 'up';
@@ -22,7 +22,7 @@ let newsSpikePerCandle = 0;
 let newsRetracementPerCandle = 0;
 
 function resetNewsState(): void {
-  nextNewsCountdown = 50 + Math.floor(Math.random() * 30);
+  nextNewsCountdown = 50 + Math.floor(Math.random() * 31);
   newsPhase = 'idle';
   newsPhaseCountdown = 0;
   newsDirection = 'up';
@@ -82,7 +82,7 @@ function advanceNewsEvent(): number {
     const bias = newsDirection === 'up' ? -newsRetracementPerCandle : newsRetracementPerCandle;
     if (newsPhaseCountdown <= 0) {
       newsPhase = 'idle';
-      nextNewsCountdown = 50 + Math.floor(Math.random() * 30);
+      nextNewsCountdown = 50 + Math.floor(Math.random() * 31);
     }
     return bias;
   }
