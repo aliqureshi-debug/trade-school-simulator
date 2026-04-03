@@ -13,6 +13,7 @@ import { useTradingEngine } from '@/hooks/useTradingEngine';
 import { useLessonEngine } from '@/hooks/useLessonEngine';
 import { useMissionEngine } from '@/hooks/useMissionEngine';
 import { ACADEMY_MODULES, getLesson } from '@/lib/academy';
+import { detectMarketCondition } from '@/lib/chartEngine';
 import {
   getLessonStartMessage, getLessonCompleteMessage, getMissionStartMessage,
   getMissionCompleteMessage, getMissionFailureMessage, getModuleCompleteMessage,
@@ -252,7 +253,7 @@ const Index = () => {
           stopLoss: stopLoss ?? undefined,
           takeProfit: takeProfit ?? undefined,
         },
-        stats, candles, 'trending' as any
+        stats, candles, detectMarketCondition(candles)
       );
 
       const blocking = violations.filter(v => v.blocking);
@@ -279,7 +280,7 @@ const Index = () => {
     if (activeTrade && missionEng.activeMission) {
       const closed = { ...activeTrade, exitPrice: currentPrice, exitTime: Date.now(), pnl: 0, status: 'closed' as const };
       setTimeout(() => {
-        missionEng.onTradeClose(closed, stats, candles, 'trending' as any, trades);
+        missionEng.onTradeClose(closed, stats, candles, detectMarketCondition(candles), trades);
       }, 50);
     }
   }, [closeTrade, activeTrade, missionEng, currentPrice, stats, candles, trades]);
