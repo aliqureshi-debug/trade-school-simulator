@@ -229,6 +229,7 @@ export interface DailyChallenge {
   criteria: ChallengeCriterion[];
   xpReward: number;
   expiresAt: number;
+  lastResetAt: number;
   completed: boolean;
 }
 
@@ -239,6 +240,7 @@ export interface WeeklyChallenge {
   dailyChallenges: DailyChallenge[];
   xpReward: number;
   expiresAt: number;
+  lastResetAt: number;
   completed: boolean;
   daysCompleted: number;
 }
